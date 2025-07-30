@@ -14,11 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentationDisplay } from "@/components/DocumentationDisplay";
-import { Github, Loader2, Wand2, Folder, File as FileIcon, ChevronDown, ChevronRight, FolderOpen, Terminal, Sparkles, FolderGit2 } from "lucide-react";
+import { Github, Loader2, Wand2, Folder, File as FileIcon, ChevronDown, ChevronRight, FolderOpen, Terminal, Sparkles, FolderGit2, Database, Cloud } from "lucide-react";
 import { Skeleton } from "./ui/skeleton";
 import { Checkbox } from "./ui/checkbox";
 import { ScrollArea } from "./ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 const formSchema = z.object({
   repoPath: z.string().min(1, { message: "Please enter a repository path." }).refine(
@@ -47,6 +48,8 @@ export function DocumentationGenerator() {
   const logContainerRef = useRef<HTMLDivElement | null>(null);
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
+  const [isLoadedFromCache, setIsLoadedFromCache] = useState(false);
+
 
   const { toast } = useToast();
 
@@ -85,15 +88,24 @@ export function DocumentationGenerator() {
   }, [logs]);
 
   const getRepoDataFromCache = (path: string) => {
-    const cachedData = localStorage.getItem(`repo-cache-${path}`);
-    if(cachedData) {
-      return JSON.parse(cachedData);
+    try {
+      const cachedData = localStorage.getItem(`repo-cache-${path}`);
+      if(cachedData) {
+        return JSON.parse(cachedData);
+      }
+    } catch (error) {
+        console.error("Failed to read from local storage:", error);
+        localStorage.removeItem(`repo-cache-${path}`);
     }
     return null;
   }
 
   const setRepoDataToCache = (path: string, data: any) => {
-    localStorage.setItem(`repo-cache-${path}`, JSON.stringify(data));
+    try {
+        localStorage.setItem(`repo-cache-${path}`, JSON.stringify(data));
+    } catch (error) {
+        console.error("Failed to write to local storage:", error);
+    }
   }
 
 
@@ -107,8 +119,10 @@ export function DocumentationGenerator() {
       setRepoTree(cached);
       initializeSelection(cached);
       setIsFetchingRepo(false);
+      setIsLoadedFromCache(true);
       return;
     }
+    setIsLoadedFromCache(false);
 
     try {
       const result = await fetchRepoContents({ repoPath: path });
@@ -135,7 +149,7 @@ export function DocumentationGenerator() {
         items.forEach(item => {
             const path = currentPath ? `${currentPath}/${item.name}` : item.name;
             if (item.type === 'file') {
-                selection[path] = true;
+                selection[path] = false;
             } else if (item.type === 'dir' && item.children) {
                 if (item.children.length > 0) {
                     expansion[path] = true; 
@@ -326,6 +340,7 @@ export function DocumentationGenerator() {
                         id={`folder-${currentPath}`}
                         checked={selectionState}
                         onCheckedChange={(checked) => toggleFolderSelection(node.children || [], currentPath, !!checked)}
+                        aria-label={`Select folder ${node.name}`}
                     />
                     <div 
                         className="flex items-center gap-2 cursor-pointer"
@@ -350,6 +365,7 @@ export function DocumentationGenerator() {
                 id={currentPath}
                 checked={!!fileSelection[currentPath]}
                 onCheckedChange={(checked) => toggleSelection(currentPath, !!checked)}
+                aria-label={`Select file ${node.name}`}
               />
               <FileIcon className="h-5 w-5 text-muted-foreground" />
               <label htmlFor={currentPath} className="cursor-pointer">{node.name}</label>
@@ -435,24 +451,38 @@ export function DocumentationGenerator() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-72 w-full rounded-md border p-4">
-              <div className="flex items-center gap-2 py-1">
-                <Checkbox
-                  id="root-selector"
-                  checked={getRootSelectionState()}
-                  onCheckedChange={(checked) => toggleAllSelection(!!checked)}
-                />
-                <div className="flex items-center gap-2">
-                  <FolderGit2 className="h-5 w-5 text-primary" />
-                  <label htmlFor="root-selector" className="font-medium cursor-pointer">
-                    {form.getValues('repoPath')}
-                  </label>
+            <TooltipProvider>
+              <ScrollArea className="h-72 w-full rounded-md border p-4">
+                <div className="flex items-center gap-2 py-1">
+                  <Checkbox
+                    id="root-selector"
+                    checked={getRootSelectionState()}
+                    onCheckedChange={(checked) => toggleAllSelection(!!checked)}
+                    aria-label="Select all files and folders"
+                  />
+                  <div className="flex items-center gap-2">
+                    <FolderGit2 className="h-5 w-5 text-primary" />
+                    <label htmlFor="root-selector" className="font-medium cursor-pointer">
+                      {form.getValues('repoPath')}
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger>
+                          {isLoadedFromCache 
+                              ? <Database className="h-4 w-4 text-muted-foreground" />
+                              : <Cloud className="h-4 w-4 text-muted-foreground" />
+                          }
+                      </TooltipTrigger>
+                      <TooltipContent>
+                          <p>{isLoadedFromCache ? 'Loaded from cache' : 'Fetched from API'}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
-              </div>
-              <div className="pl-6 border-l border-dashed ml-2 mt-2">
-                <FileTreeView nodes={repoTree} />
-              </div>
-            </ScrollArea>
+                <div className="pl-6 border-l border-dashed ml-2 mt-2">
+                  <FileTreeView nodes={repoTree} />
+                </div>
+              </ScrollArea>
+            </TooltipProvider>
              <div className="flex flex-col sm:flex-row items-center gap-4 mt-4">
                 <Button onClick={handleGenerateDocs} disabled={isLoading || isFetchingContent} className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90">
                 {isLoading || isFetchingContent ? (
@@ -471,9 +501,9 @@ export function DocumentationGenerator() {
                     <Label htmlFor="model-select" className="flex items-center gap-2 text-sm font-medium">
                         <Sparkles className="h-4 w-4" /> AI Model
                     </Label>
-                    <Select value={selectedModel} onValueChange={setSelectedModel}>
+                    <Select value={selectedModel} onValueChange={setSelectedModel} disabled={availableModels.length === 0}>
                         <SelectTrigger id="model-select" className="w-full sm:w-[200px]">
-                            <SelectValue placeholder="Select a model" />
+                            <SelectValue placeholder={availableModels.length > 0 ? "Select a model" : "Loading models..."} />
                         </SelectTrigger>
                         <SelectContent>
                             {availableModels.map(model => (
@@ -512,3 +542,5 @@ export function DocumentationGenerator() {
     </>
   );
 }
+
+    
