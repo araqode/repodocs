@@ -19,7 +19,7 @@ export default function Home() {
       </div>
 
       <footer className="text-center mt-16 text-muted-foreground text-sm">
-        <p>Powered by Firebase Genkit and Next.js</p>
+        <p>Powered by Google Cloud and Next.js</p>
       </footer>
     </main>
   );

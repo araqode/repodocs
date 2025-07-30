@@ -2,7 +2,7 @@
 
 import { ai } from "@/ai/genkit";
 import { z } from "zod";
-import { gemini20Flash, gemini15Flash, gemini15Pro } from '@genkit-ai/googleai';
+import { gemini20Flash, gemini15Flash, gemini15Pro, googleAI } from '@genkit-ai/googleai';
 import { listModels } from 'genkit';
 
 
@@ -18,6 +18,7 @@ export interface FileNode {
 const FetchRepoContentsInputSchema = z.object({
   repoPath: z.string().describe('The path of the GitHub repository in owner/repo format.'),
   path: z.string().optional().describe('The path of the directory to fetch. Fetches root if omitted.'),
+  apiKey: z.string().optional().describe('GitHub API Key')
 });
 
 const FileNodeSchema: z.ZodType<FileNode> = z.lazy(() =>
@@ -34,11 +35,11 @@ const FileNodeSchema: z.ZodType<FileNode> = z.lazy(() =>
 const FetchRepoContentsOutputSchema = z.array(FileNodeSchema);
 
 
-async function fetchFromApi(url: string) {
-    const GITHUB_API_TOKEN = process.env.GITHUB_API_TOKEN;
+async function fetchFromApi(url: string, apiKey?: string) {
     const headers: HeadersInit = {
         'Accept': 'application/vnd.github.v3+json',
     };
+    const GITHUB_API_TOKEN = apiKey || process.env.GITHUB_API_TOKEN;
     if (GITHUB_API_TOKEN) {
         headers['Authorization'] = `Bearer ${GITHUB_API_TOKEN}`;
     }
@@ -52,10 +53,10 @@ async function fetchFromApi(url: string) {
     return response.json();
 }
 
-export async function fetchFileContent({ owner, repo, path }: { owner: string, repo: string, path: string }): Promise<string> {
+export async function fetchFileContent({ owner, repo, path, apiKey }: { owner: string, repo: string, path: string, apiKey?: string }): Promise<string> {
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
     try {
-        const contentResponse = await fetchFromApi(url);
+        const contentResponse = await fetchFromApi(url, apiKey);
         if (contentResponse.encoding === 'base64') {
             return Buffer.from(contentResponse.content, 'base64').toString('utf-8');
         }
@@ -67,9 +68,9 @@ export async function fetchFileContent({ owner, repo, path }: { owner: string, r
 }
 
 
-async function getRepoTree(owner: string, repo: string, path: string = ''): Promise<FileNode[]> {
+async function getRepoTree(owner: string, repo: string, path: string = '', apiKey?: string): Promise<FileNode[]> {
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-    const contents = await fetchFromApi(url);
+    const contents = await fetchFromApi(url, apiKey);
 
     if (!Array.isArray(contents)) {
         throw new Error('Unexpected API response format. Expected an array of files/directories.');
@@ -91,7 +92,7 @@ export const fetchRepoContents = ai.defineTool(
     inputSchema: FetchRepoContentsInputSchema,
     outputSchema: FetchRepoContentsOutputSchema,
   },
-  async ({ repoPath, path }) => {
+  async ({ repoPath, path, apiKey }) => {
     const urlParts = repoPath.split('/');
     if (urlParts.length !== 2) {
       throw new Error('Invalid GitHub repository path. Please use the owner/repo format.');
@@ -99,7 +100,7 @@ export const fetchRepoContents = ai.defineTool(
     const [owner, repo] = urlParts;
     
     try {
-        return await getRepoTree(owner, repo, path);
+        return await getRepoTree(owner, repo, path, apiKey);
     } catch (e) {
         console.error(`Error fetching tree for ${repoPath} at path ${path}:`, e);
         throw e;
@@ -108,8 +109,9 @@ export const fetchRepoContents = ai.defineTool(
 );
 
 
-export async function listGenerativeModels() {
-    const allModels = await listModels();
+export async function listGenerativeModels({apiKey}: {apiKey?: string}) {
+    const customAI = googleAI({apiKey});
+    const allModels = await listModels({plugins: [customAI]});
     const supportedModels = new Set([gemini20Flash.name, gemini15Flash.name, gemini15Pro.name]);
     const generativeModels = allModels.filter(m => m.supportsGenerate && supportedModels.has(m.name));
     

@@ -26,6 +26,11 @@ type Model = {
     name: string;
 };
 
+type ApiKeys = {
+    gemini: string;
+    github: string;
+};
+
 export function useDocGenerator() {
   const [documentation, setDocumentation] = useState<string | null>(null);
   const [generatedRepoUrl, setGeneratedRepoUrl] = useState<string>("");
@@ -43,6 +48,9 @@ export function useDocGenerator() {
   const [cacheStatus, setCacheStatus] = useState<RepoState<{[path: string]: boolean}>>({});
   const [loadedPaths, setLoadedPaths] = useState<RepoState<{[path: string]: boolean}>>({});
   const [fileSizes, setFileSizes] = useState<RepoState<{[path: string]: number}>>({});
+  const [apiKeys, setApiKeys] = useState<ApiKeys>({ gemini: '', github: '' });
+  const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
+
   
   const { toast } = useToast();
 
@@ -50,11 +58,23 @@ export function useDocGenerator() {
     resolver: zodResolver(repoFormSchema),
     defaultValues: { repoPath: "" },
   });
+  
+  useEffect(() => {
+    const storedKeys = getCachedData('api-keys');
+    if (storedKeys) {
+      setApiKeys(storedKeys);
+    }
+  }, []);
 
   useEffect(() => {
     async function loadModels() {
+       if (!apiKeys.gemini) {
+        setAvailableModels([]);
+        setSelectedModel("");
+        return;
+      }
       try {
-        const models = await listGenerativeModels();
+        const models = await listGenerativeModels({apiKey: apiKeys.gemini});
         setAvailableModels(models);
         if (models.length > 0) {
           setSelectedModel(models[0].id);
@@ -64,12 +84,14 @@ export function useDocGenerator() {
         toast({
           variant: "destructive",
           title: "Failed to load AI models.",
-          description: "Sticking to default model.",
+          description: "Please check your Gemini API key.",
         });
+        setAvailableModels([]);
+        setSelectedModel("");
       }
     }
     loadModels();
-  }, [toast]);
+  }, [toast, apiKeys.gemini]);
 
   useEffect(() => {
     if (logContainerRef.current) {
@@ -151,7 +173,7 @@ export function useDocGenerator() {
     if (path) setLoadedPaths(prev => ({...prev, [repoPath]: {...(prev[repoPath] || {}), [path]: true}}));
 
     try {
-      const result = await fetchRepoContents({ repoPath, path });
+      const result = await fetchRepoContents({ repoPath, path, apiKey: apiKeys.github });
       updateTreeWithNewNodes(repoPath, result, path);
       setCachedData(cacheKey, result);
       setCacheStatus(prev => ({...prev, [repoPath]: {...(prev[repoPath] || {}), [path || 'root']: false}}));
@@ -160,7 +182,7 @@ export function useDocGenerator() {
       toast({
         variant: "destructive",
         title: "Failed to fetch repository.",
-        description: error instanceof Error ? error.message : "An unknown error occurred.",
+        description: error instanceof Error ? error.message : "An unknown error occurred. Check your GitHub token.",
       });
       if (path) setLoadedPaths(prev => ({...prev, [repoPath]: {...(prev[repoPath] || {}), [path]: false}})); // Allow retry
     }
@@ -218,6 +240,15 @@ export function useDocGenerator() {
 
   async function handleGenerateDocs() {
     if (repoPaths.length === 0) return;
+    if (!apiKeys.gemini) {
+      toast({
+        variant: "destructive",
+        title: "Missing API Key",
+        description: "Please enter your Gemini API key in the settings.",
+      });
+      setIsApiSettingsOpen(true);
+      return;
+    }
     
     setIsLoading(true);
     setDocumentation(null);
@@ -262,7 +293,7 @@ export function useDocGenerator() {
         } else {
             setLogs(prev => [...prev, `Fetching ${filePath}...`]);
             try {
-                const content = await fetchFileContent({ owner, repo, path: file.path });
+                const content = await fetchFileContent({ owner, repo, path: file.path, apiKey: apiKeys.github });
                 const size = new Blob([content]).size;
                 fetchedFiles.push({ path: filePath, content });
                 setCachedData(cacheKey, { content, size });
@@ -292,7 +323,7 @@ export function useDocGenerator() {
 
     try {
       setLogs(prev => [...prev, `Generating documentation with ${selectedModel}...`]);
-      const result = await generateDocumentation({ files: fetchedFiles, model: selectedModel });
+      const result = await generateDocumentation({ files: fetchedFiles, model: selectedModel, apiKey: apiKeys.gemini });
       if (result.documentation) {
         setDocumentation(result.documentation);
         setLogs(prev => [...prev, 'Documentation generated successfully!']);
@@ -398,6 +429,11 @@ export function useDocGenerator() {
       if (!tree) return false;
       return getFolderSelectionState(repoPath, tree);
   };
+  
+  const handleSetApiKeys = (keys: ApiKeys) => {
+    setApiKeys(keys);
+    setCachedData('api-keys', keys);
+  };
 
   return {
     form,
@@ -426,6 +462,10 @@ export function useDocGenerator() {
     getFolderSelectionState,
     toggleAllSelectionForRepo,
     getRootSelectionState,
-    fileSizes
+    fileSizes,
+    apiKeys,
+    setApiKeys: handleSetApiKeys,
+    isApiSettingsOpen,
+    setIsApiSettingsOpen,
   };
 }

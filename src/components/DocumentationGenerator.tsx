@@ -10,6 +10,7 @@ import { FileTree } from "@/components/doc-generator/FileTree";
 import { ActionBar } from "@/components/doc-generator/ActionBar";
 import { LogDisplay } from "@/components/doc-generator/LogDisplay";
 import { Github } from "lucide-react";
+import { ApiSettings } from "./doc-generator/ApiSettings";
 
 export function DocumentationGenerator() {
   const {
@@ -39,11 +40,21 @@ export function DocumentationGenerator() {
     generatedRepoUrl,
     logContainerRef,
     toggleSelection,
-    fileSizes
+    fileSizes,
+    apiKeys,
+    setApiKeys,
+    isApiSettingsOpen,
+    setIsApiSettingsOpen
   } = useDocGenerator();
 
   return (
     <>
+       <ApiSettings 
+        isOpen={isApiSettingsOpen}
+        onOpenChange={setIsApiSettingsOpen}
+        apiKeys={apiKeys}
+        setApiKeys={setApiKeys}
+      />
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="font-headline text-2xl flex items-center gap-2">
@@ -55,7 +66,7 @@ export function DocumentationGenerator() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <RepoInput form={form} onAddRepo={onAddRepo} />
+          <RepoInput form={form} onAddRepo={onAddRepo} onSettingsClick={() => setIsApiSettingsOpen(true)} />
           {repoPaths.length > 0 && (
             <div className="mt-6">
               <h3 className="text-lg font-medium mb-2">Added Repositories</h3>
