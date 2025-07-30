@@ -163,9 +163,7 @@ export function useDocGenerator() {
       if(cachedData) return JSON.parse(cachedData);
     } catch (error) {
       console.error("Failed to read from local storage:", error);
-      localStorage.removeItem(key);
     }
-    return null;
   }, []);
 
   const setCachedData = useCallback((key: string, data: any) => {
@@ -419,25 +417,29 @@ export function useDocGenerator() {
       setLogs(prev => [...prev, `  [AI] Summarizing ${fetchedFiles.length} file(s)...`]);
       
       const summaries = [];
+      const configFilesRegex = /(\.(json|lock|config|rc|md|yml|yaml)|LICENSE)$/i;
+
       for (const file of fetchedFiles) {
           setLogs(prev => [...prev, `  Summarizing file: ${file.path}`]);
           await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
 
-          const summarizeFilePrompt = `You are an expert technical writer. Analyze the following file and provide a concise summary.
-            Your response must be a JSON object with keys "path" and "summary".
+          const isConfigFile = configFilesRegex.test(file.path);
+          
+          const summarizeFilePrompt = `You are an expert technical writer. Your response must be a JSON object with keys "path" and "summary".
             
+            Analyze the following file.
             File Path: ${file.path}
             Content:
             '''
             ${file.content}
             '''
-
-            Your summary should cover:
-            - The primary purpose and responsibility of this file.
-            - Key functions, classes, or components exported.
-            - Its role within the overall project structure.
-
-            Provide only the summary for this single file.`;
+            
+            Instructions:
+            ${isConfigFile 
+              ? "This appears to be a config or metadata file. Provide a brief, one-sentence description of its purpose."
+              : "Provide a concise summary covering the file's primary purpose, its key functions/classes/components, and its role in the project."
+            }
+            `;
             
             const summaryResponse = await callGeminiAPI(apiKeys.gemini, summarizeFilePrompt);
             setAiInteractions(prev => [...prev, {request: summarizeFilePrompt, response: summaryResponse}]);
@@ -446,21 +448,21 @@ export function useDocGenerator() {
       
       setLogs(prev => [...prev, `  [AI] Synthesizing final documentation...`]);
       
-      const synthesizeDocumentationPrompt = `You are an expert technical writer. You have been provided with summaries for several files from a codebase. Your task is to synthesize these into a single, comprehensive technical document.
-        Your response must be a JSON object with the key "documentation".
-
-        The user's overall goal for this documentation is:
-        ${editablePrompt || 'Provide a high-level overview of the project, including its purpose and key features. Then, for each file, describe its role and functionality based on the summary. Finally, detail the relationships and interactions between the different files and components.'}
-
-        Here are the summaries for each file:
-        ${JSON.stringify(summaries, null, 2)}
-        
-        Please adhere to the following instructions:
-        - Create a well-structured and comprehensive technical documentation.
-        - The documentation should include an overview of the project, followed by the detailed descriptions based on the summaries provided.
-        - **Crucially, analyze and explain the relationships and interactions between the different files.** This is vital for understanding the project's data flow and overall structure.
-        - Format the final output for readability. Use Markdown for structuring the text (e.g., headings, lists, code blocks).
-        - Use dashed-underline for inline hrefs/links for documentation to file mapping.
+      const synthesizeDocumentationPrompt = `You are an expert technical writer. You will be given a series of file summaries from a codebase. Your task is to synthesize these into a single, comprehensive technical document in Markdown format.
+      
+      Your response must be a JSON object with a single key "documentation".
+      
+      User's Goal: "${editablePrompt}"
+      
+      File Summaries:
+      ${JSON.stringify(summaries, null, 2)}
+      
+      Instructions:
+      1.  Create a high-level overview of the project based on the user's goal and the file summaries.
+      2.  For each file, provide a detailed description based on its summary.
+      3.  Analyze and explain the relationships and interactions between different files.
+      4.  Format the entire output as a single Markdown string with clear headings, lists, and code blocks for readability.
+      5.  Use dashed-underline for inline hrefs/links for documentation to file mapping.
       `;
 
       const finalResponse = await callGeminiAPI(apiKeys.gemini, synthesizeDocumentationPrompt);
