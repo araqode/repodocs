@@ -37,23 +37,27 @@ const prompt = ai.definePrompt({
   output: { schema: GenerateDocumentationOutputSchema },
   prompt: `You are an expert technical writer. Generate comprehensive documentation for the provided files from a GitHub repository.
 
-The user has selected the following files to be documented:
+The user has provided the following files and structure for documentation:
 {{#each files}}
-File: {{{path}}}
+---
+File Path: {{{path}}}
 Content:
 \'\'\'
 {{{content}}}
 \'\'\'
+---
 {{/each}}
 
 Please adhere to the following instructions:
-- Ensure the documentation includes project architecture, key components, usage instructions, and any relevant examples.
-- Properly link and map relationships between files and documentation parts for clarity.
-- Format the documentation for readability and include a table of contents.
+- Analyze the provided files to understand the project architecture, key components, and their functionalities.
+- Create a well-structured and comprehensive technical documentation.
+- The documentation should include an overview of the project, detailed descriptions of each component/file, usage instructions, and relevant examples where applicable.
+- Ensure you accurately map and explain the relationships and interactions between different files and components. This is crucial for understanding the project's data flow and overall structure.
+- Format the final output for readability. Use Markdown for structuring the text (e.g., headings, lists, code blocks).
 - Use dashed-underline for inline hrefs/links for documentation to file mapping.
 
 {{#if userPrompt}}
-Additional instructions from the user:
+The user has provided these additional instructions:
 {{{userPrompt}}}
 {{/if}}
 `,
@@ -64,18 +68,14 @@ const generateDocumentationFlow = ai.defineFlow(
     name: 'generateDocumentationFlow',
     inputSchema: GenerateDocumentationInputSchema,
     outputSchema: GenerateDocumentationOutputSchema,
-    retry: {
-      maxAttempts: 3,
-      backoff: {
-        duration: 2000,
-        factor: 2
-      }
-    }
   },
   async (input) => {
-    const customAI = googleAI({apiKey: input.apiKey || undefined});
-    const model = 'googleai/gemini-1.5-flash';
-    const { output } = await prompt(input, { model, plugins: [customAI] });
+    let plugins = [];
+    if (input.apiKey) {
+      plugins.push(googleAI({ apiKey: input.apiKey }));
+    }
+    
+    const { output } = await prompt(input, { plugins });
     return output!;
   }
 );
