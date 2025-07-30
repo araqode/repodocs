@@ -121,13 +121,17 @@ export const generateDocumentationFlow = ai.defineFlow(
       plugins.push(googleAI({ apiKey: input.apiKey }));
     }
 
-    // Step 1: Summarize each file individually (Map step)
-    const summaryPromises = input.files.map(file =>
-      summarizeFilePrompt({ path: file.path, content: file.content }, { plugins })
-    );
-
-    const summaryResults = await Promise.all(summaryPromises);
-    const summaries = summaryResults.map(r => r.output!).filter(Boolean) as z.infer<typeof FileSummarySchema>[];
+    // Step 1: Summarize each file individually (Map step) - SEQUENTIALLY
+    const summaries: z.infer<typeof FileSummarySchema>[] = [];
+    for (const file of input.files) {
+      const summaryResponse = await summarizeFilePrompt(
+        { path: file.path, content: file.content },
+        { plugins }
+      );
+      if (summaryResponse.output) {
+        summaries.push(summaryResponse.output);
+      }
+    }
 
     // Step 2: Synthesize the final documentation from summaries (Reduce step)
     const finalDocumentationResponse = await synthesizeDocumentationPrompt(
