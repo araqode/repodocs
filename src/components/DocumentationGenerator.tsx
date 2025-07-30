@@ -35,19 +35,23 @@ type Model = {
     name: string;
 };
 
-const CacheStatusIcon = ({ isLoadedFromCache }: { isLoadedFromCache: boolean }) => (
-    <Tooltip>
-      <TooltipTrigger>
-        {isLoadedFromCache 
-            ? <Database className="h-4 w-4 text-muted-foreground" />
-            : <Cloud className="h-4 w-4 text-muted-foreground" />
-        }
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>{isLoadedFromCache ? 'Loaded from cache' : 'Fetched from API'}</p>
-      </TooltipContent>
-    </Tooltip>
-);
+const CacheStatusIcon = ({ path, cacheStatus }: { path: string, cacheStatus: {[path: string]: boolean} }) => {
+    const isLoadedFromCache = cacheStatus[path];
+    
+    return (
+        <Tooltip>
+        <TooltipTrigger>
+            {isLoadedFromCache 
+                ? <Database className="h-4 w-4 text-muted-foreground" />
+                : <Cloud className="h-4 w-4 text-muted-foreground" />
+            }
+        </TooltipTrigger>
+        <TooltipContent>
+            <p>{isLoadedFromCache ? 'Loaded from cache' : 'Fetched from API'}</p>
+        </TooltipContent>
+        </Tooltip>
+    )
+};
 
 
 export function DocumentationGenerator() {
@@ -63,7 +67,7 @@ export function DocumentationGenerator() {
   const logContainerRef = useRef<HTMLDivElement | null>(null);
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
-  const [isLoadedFromCache, setIsLoadedFromCache] = useState(false);
+  const [cacheStatus, setCacheStatus] = useState<{[path: string]: boolean}>({});
 
 
   const { toast } = useToast();
@@ -123,6 +127,23 @@ export function DocumentationGenerator() {
     }
   }
 
+  const checkCacheStatus = (nodes: FileNode[], repoPath: string) => {
+    const status: {[path: string]: boolean} = {};
+    const cachedRepo = getRepoDataFromCache(repoPath);
+    
+    function traverse(items: FileNode[], currentPath = '') {
+        items.forEach(item => {
+            const path = currentPath ? `${currentPath}/${item.name}` : item.name;
+            status[path] = !!cachedRepo; // Simplified: if repo is cached, all its initial structure is.
+            if (item.children) {
+                traverse(item.children, path);
+            }
+        });
+    }
+    traverse(nodes);
+    setCacheStatus(status);
+  };
+
 
   async function handleFetchRepo(path: string) {
     setIsFetchingRepo(true);
@@ -133,16 +154,16 @@ export function DocumentationGenerator() {
     if (cached) {
       setRepoTree(cached);
       initializeSelection(cached);
+      checkCacheStatus(cached, path);
       setIsFetchingRepo(false);
-      setIsLoadedFromCache(true);
       return;
     }
-    setIsLoadedFromCache(false);
 
     try {
       const result = await fetchRepoContents({ repoPath: path });
       setRepoTree(result);
       initializeSelection(result);
+      checkCacheStatus(result, path);
       setRepoDataToCache(path, result);
     } catch (error) {
       console.error("Error fetching repository:", error);
@@ -364,7 +385,7 @@ export function DocumentationGenerator() {
                         {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         {isExpanded ? <FolderOpen className="h-5 w-5 text-primary" /> : <Folder className="h-5 w-5 text-primary" />}
                         <label htmlFor={`folder-${currentPath}`} className="font-medium cursor-pointer">{node.name}</label>
-                        <CacheStatusIcon isLoadedFromCache={isLoadedFromCache} />
+                        <CacheStatusIcon path={currentPath} cacheStatus={cacheStatus} />
                     </div>
                 </div>
                 {isExpanded && node.children && (
@@ -385,7 +406,7 @@ export function DocumentationGenerator() {
               />
               <FileIcon className="h-5 w-5 text-muted-foreground" />
               <label htmlFor={currentPath} className="cursor-pointer">{node.name}</label>
-              <CacheStatusIcon isLoadedFromCache={isLoadedFromCache} />
+              <CacheStatusIcon path={currentPath} cacheStatus={cacheStatus} />
             </li>
           );
         })}
@@ -482,7 +503,7 @@ export function DocumentationGenerator() {
                     <label htmlFor="root-selector" className="font-medium cursor-pointer">
                       {form.getValues('repoPath')}
                     </label>
-                    <CacheStatusIcon isLoadedFromCache={isLoadedFromCache} />
+                    <CacheStatusIcon path={form.getValues('repoPath')} cacheStatus={cacheStatus} />
                   </div>
                 </div>
                 <div className="pl-6 border-l border-dashed ml-2 mt-2">
