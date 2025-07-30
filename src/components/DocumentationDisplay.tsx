@@ -90,37 +90,6 @@ export function DocumentationDisplay({ documentation, repoUrl }: DocumentationDi
         <div className="mt-6 doc-display font-body text-base">
             {renderContent(documentation)}
         </div>
-        
-        <Separator className="my-8" />
-        
-        <div>
-          <h4 className="font-headline text-lg font-semibold mb-4 text-center">
-            Custom Formatting
-          </h4>
-          <Card className="max-w-md mx-auto bg-muted/50">
-            <CardHeader>
-              <CardTitle className="text-lg font-headline">Coming Soon!</CardTitle>
-              <CardDescription>More options to customize the output will be available here.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 opacity-50 pointer-events-none">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="heading-style">Heading Style</Label>
-                <Select defaultValue="default">
-                  <SelectTrigger id="heading-style" className="w-[180px] bg-background">
-                    <SelectValue placeholder="Select style" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Default</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="dark-mode">Dark Mode Code</Label>
-                <Switch id="dark-mode" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </CardContent>
     </Card>
   );
