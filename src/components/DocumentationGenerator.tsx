@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { generateDocumentation } from "@/ai/flows/generate-documentation";
-import { fetchRepoContents, type FileNode } from "@/ai/tools/fetch-repo-contents";
+import { fetchRepoContents, fetchFileContent, type FileNode } from "@/ai/tools/fetch-repo-contents";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentationDisplay } from "@/components/DocumentationDisplay";
-import { Github, Loader2, Wand2, Folder, File as FileIcon, ChevronDown, ChevronRight, FolderOpen } from "lucide-react";
+import { Github, Loader2, Wand2, Folder, File as FileIcon, ChevronDown, ChevronRight, FolderOpen, Terminal } from "lucide-react";
 import { Skeleton } from "./ui/skeleton";
 import { Checkbox } from "./ui/checkbox";
 import { ScrollArea } from "./ui/scroll-area";
@@ -32,9 +32,13 @@ export function DocumentationGenerator() {
   const [repoUrl, setRepoUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingRepo, setIsFetchingRepo] = useState(false);
+  const [isFetchingContent, setIsFetchingContent] = useState(false);
   const [repoTree, setRepoTree] = useState<FileNode[] | null>(null);
   const [fileSelection, setFileSelection] = useState<FileSelection>({});
   const [expandedFolders, setExpandedFolders] = useState<{[path: string]: boolean}>({});
+  const [logs, setLogs] = useState<string[]>([]);
+  const logContainerRef = useRef<HTMLDivElement | null>(null);
+
 
   const { toast } = useToast();
 
@@ -44,6 +48,12 @@ export function DocumentationGenerator() {
       repoPath: "",
     },
   });
+
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   const getRepoDataFromCache = (path: string) => {
     const cachedData = localStorage.getItem(`repo-cache-${path}`);
@@ -99,7 +109,7 @@ export function DocumentationGenerator() {
                 selection[path] = true;
             } else if (item.type === 'dir' && item.children) {
                 if (item.children.length > 0) {
-                    expansion[path] = true; // Expand directories with content by default
+                    expansion[path] = true; 
                 }
                 traverse(item.children, path);
             }
@@ -120,14 +130,16 @@ export function DocumentationGenerator() {
     
     setIsLoading(true);
     setDocumentation(null);
+    setLogs([]);
+    setIsFetchingContent(true);
 
-    const selectedFiles: { path: string, content: string }[] = [];
+    const selectedFilesToFetch: { path: string }[] = [];
     
     function findSelectedFiles(nodes: FileNode[], currentPath = '') {
       nodes.forEach(node => {
         const path = currentPath ? `${currentPath}/${node.name}` : node.name;
-        if (node.type === 'file' && fileSelection[path] && node.content) {
-          selectedFiles.push({ path, content: node.content });
+        if (node.type === 'file' && fileSelection[path]) {
+          selectedFilesToFetch.push({ path });
         } else if (node.type === 'dir' && node.children) {
           findSelectedFiles(node.children, path);
         }
@@ -136,20 +148,53 @@ export function DocumentationGenerator() {
 
     findSelectedFiles(repoTree);
 
-    if(selectedFiles.length === 0) {
+    if(selectedFilesToFetch.length === 0) {
         toast({
             variant: "destructive",
             title: "No files selected",
             description: "Please select at least one file to generate documentation.",
         });
         setIsLoading(false);
+        setIsFetchingContent(false);
+        return;
+    }
+
+    const [owner, repo] = form.getValues('repoPath').split('/');
+    const fetchedFiles: { path: string, content: string }[] = [];
+
+    for (const file of selectedFilesToFetch) {
+        setLogs(prev => [...prev, `Fetching ${file.path}...`]);
+        try {
+            const content = await fetchFileContent({ owner, repo, path: file.path });
+            fetchedFiles.push({ path: file.path, content });
+            setLogs(prev => [...prev, `Fetched ${file.path} successfully.`]);
+        } catch (error) {
+            setLogs(prev => [...prev, `Failed to fetch ${file.path}.`]);
+            toast({
+                variant: "destructive",
+                title: `Failed to fetch ${file.path}`,
+                description: error instanceof Error ? error.message : "An unknown error occurred.",
+            });
+        }
+    }
+    setIsFetchingContent(false);
+    
+    if (fetchedFiles.length === 0) {
+        toast({
+            variant: "destructive",
+            title: "Failed to fetch content",
+            description: "Could not fetch content for any of the selected files.",
+        });
+        setIsLoading(false);
         return;
     }
 
     try {
-      const result = await generateDocumentation({ files: selectedFiles });
+      setLogs(prev => [...prev, 'Generating documentation...']);
+      const result = await generateDocumentation({ files: fetchedFiles });
       if (result.documentation) {
         setDocumentation(result.documentation);
+        setLogs(prev => [...prev, 'Documentation generated successfully!']);
         toast({
             title: "Success!",
             description: "Documentation generated successfully.",
@@ -160,6 +205,7 @@ export function DocumentationGenerator() {
     } catch (error) {
       console.error("Error generating documentation:", error);
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+       setLogs(prev => [...prev, `Error: ${errorMessage}`]);
       toast({
         variant: "destructive",
         title: "Uh oh! Something went wrong.",
@@ -298,11 +344,11 @@ export function DocumentationGenerator() {
             <ScrollArea className="h-72 w-full rounded-md border p-4">
               <FileTreeView nodes={repoTree} />
             </ScrollArea>
-            <Button onClick={handleGenerateDocs} disabled={isLoading} className="mt-4 w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90">
-              {isLoading ? (
+             <Button onClick={handleGenerateDocs} disabled={isLoading || isFetchingContent} className="mt-4 w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90">
+              {isLoading || isFetchingContent ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
+                  {isFetchingContent ? 'Fetching Files...' : 'Generating...'}
                 </>
               ) : (
                 <>
@@ -315,7 +361,23 @@ export function DocumentationGenerator() {
         </Card>
       )}
 
-      {isLoading && <LoadingSkeleton />}
+      {(isFetchingContent || isLoading || (logs && logs.length > 0)) && (
+        <Card className="mt-8">
+            <CardHeader>
+                <CardTitle className="font-headline text-2xl flex items-center gap-2"><Terminal/>Logs</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <ScrollArea className="h-48 w-full bg-muted rounded-md p-4" ref={logContainerRef}>
+                    {logs.map((log, index) => (
+                        <p key={index} className="text-sm font-mono whitespace-pre-wrap">{`> ${log}`}</p>
+                    ))}
+                     {(isFetchingContent || isLoading) && <Loader2 className="h-4 w-4 animate-spin mt-2" />}
+                </ScrollArea>
+            </CardContent>
+        </Card>
+      )}
+
+      {isLoading && !documentation && <LoadingSkeleton />}
       {documentation && !isLoading && (
         <DocumentationDisplay documentation={documentation} repoUrl={repoUrl}/>
       )}

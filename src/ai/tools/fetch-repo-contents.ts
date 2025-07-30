@@ -46,6 +46,20 @@ async function fetchFromApi(url: string) {
     return response.json();
 }
 
+export async function fetchFileContent({ owner, repo, path }: { owner: string, repo: string, path: string }): Promise<string> {
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    try {
+        const contentResponse = await fetchFromApi(url);
+        if (contentResponse.encoding === 'base64') {
+            return Buffer.from(contentResponse.content, 'base64').toString('utf-8');
+        }
+        return 'Could not decode file content.';
+    } catch (e) {
+        console.error(`Could not fetch content for ${path}: ${e}`);
+        return `Error fetching content for ${path}.`;
+    }
+}
+
 
 async function getRepoTree(owner: string, repo: string, branch: string = 'main'): Promise<FileNode[]> {
     const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
@@ -75,18 +89,6 @@ async function getRepoTree(owner: string, repo: string, branch: string = 'main')
 
                 if (isDir) {
                     node.children = [];
-                } else {
-                    if (item.type === 'blob' && item.url) {
-                      try {
-                        const contentResponse = await fetchFromApi(item.url);
-                        if (contentResponse.encoding === 'base64') {
-                          node.content = Buffer.from(contentResponse.content, 'base64').toString('utf-8');
-                        }
-                      } catch (e) {
-                         console.warn(`Could not fetch content for ${item.path}: ${e}`);
-                         node.content = 'Error fetching content.'
-                      }
-                    }
                 }
                 
                 fileMap[currentPath] = node;
@@ -113,7 +115,7 @@ async function getRepoTree(owner: string, repo: string, branch: string = 'main')
 export const fetchRepoContents = ai.defineTool(
   {
     name: "fetchRepoContents",
-    description: "Fetches the file structure and content of a public GitHub repository.",
+    description: "Fetches the file structure of a public GitHub repository.",
     inputSchema: FetchRepoContentsInputSchema,
     outputSchema: FetchRepoContentsOutputSchema,
   },
@@ -124,11 +126,9 @@ export const fetchRepoContents = ai.defineTool(
     }
     const [owner, repo] = urlParts;
     
-    // You might need to determine the default branch dynamically, but 'main' is a common default.
     try {
         return await getRepoTree(owner, repo, 'main');
     } catch (e) {
-        // If 'main' branch fails, try 'master' as a fallback
         console.log("Failed to fetch 'main' branch, trying 'master'");
         return await getRepoTree(owner, repo, 'master');
     }
