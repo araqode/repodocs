@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  basePath: "/repodocs",
 };
 
 export default nextConfig;
