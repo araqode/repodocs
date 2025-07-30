@@ -74,7 +74,7 @@ const generateDocumentationFlow = ai.defineFlow(
   },
   async (input) => {
     const customAI = googleAI({apiKey: input.apiKey || undefined});
-    const model = customAI.model('gemini-1.5-flash'); // Use a default model
+    const model = 'googleai/gemini-1.5-flash';
     const { output } = await prompt(input, { model, plugins: [customAI] });
     return output!;
   }
