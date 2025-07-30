@@ -1,5 +1,3 @@
-// Implemented Genkit flow for generating documentation from a GitHub repository URL.
-
 'use server';
 
 /**
@@ -10,13 +8,15 @@
  * - GenerateDocumentationOutput - The return type for the generateDocumentation function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { fetchRepoContents } from '../tools/fetch-repo-contents';
 
 const GenerateDocumentationInputSchema = z.object({
-  repoUrl: z
-    .string()
-    .describe('The URL of the GitHub repository to document.'),
+  files: z.array(z.object({
+    path: z.string(),
+    content: z.string(),
+  })).describe('An array of file objects, each with a path and its content.'),
 });
 export type GenerateDocumentationInput = z.infer<typeof GenerateDocumentationInputSchema>;
 
@@ -31,10 +31,21 @@ export async function generateDocumentation(input: GenerateDocumentationInput): 
 
 const prompt = ai.definePrompt({
   name: 'generateDocumentationPrompt',
-  input: {schema: GenerateDocumentationInputSchema},
-  output: {schema: GenerateDocumentationOutputSchema},
-  prompt: `You are an expert technical writer. Generate comprehensive documentation for the GitHub repository at the following URL: {{{repoUrl}}}.\n\nEnsure the documentation includes project architecture, key components, usage instructions, and any relevant examples. Properly link and map relationships between files and documentation parts for clarity. Format the documentation for readability and include a table of contents.
-\nConsider the project's structure, coding conventions, and any README or contributing guidelines available in the repository.\n\nOutput the documentation in a well-formatted manner. Use dashed-underline for inline hrefs/links for documentation to file mapping.
+  input: { schema: GenerateDocumentationInputSchema },
+  output: { schema: GenerateDocumentationOutputSchema },
+  prompt: `You are an expert technical writer. Generate comprehensive documentation for the provided files from a GitHub repository.
+The user has selected the following files to be documented:
+{{#each files}}
+File: {{{path}}}
+Content:
+\'\'\'
+{{{content}}}
+\'\'\'
+
+{{/each}}
+
+Ensure the documentation includes project architecture, key components, usage instructions, and any relevant examples. Properly link and map relationships between files and documentation parts for clarity. Format the documentation for readability and include a table of contents.
+Use dashed-underline for inline hrefs/links for documentation to file mapping.
 `,
 });
 
@@ -44,8 +55,8 @@ const generateDocumentationFlow = ai.defineFlow(
     inputSchema: GenerateDocumentationInputSchema,
     outputSchema: GenerateDocumentationOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    const { output } = await prompt(input);
     return output!;
   }
 );
