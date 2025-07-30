@@ -1,11 +1,10 @@
 'use server';
 
 /**
- * @fileOverview Generates comprehensive project technical documentation from a fetched repository's contents.
+ * @fileOverview Defines the Genkit flow for generating comprehensive project technical documentation.
  *
- * - generateDocumentation - A function that handles the documentation generation process.
- * - GenerateDocumentationInput - The input type for the generateDocumentation function.
- * - GenerateDocumentationOutput - The return type for the generateDocumentation function.
+ * This file contains the core logic for the documentation generation, including the
+ * prompt definition and the flow that interacts with the generative AI model.
  */
 
 import { ai } from '@/ai/genkit';
@@ -26,10 +25,6 @@ const GenerateDocumentationOutputSchema = z.object({
   documentation: z.string().describe('The generated documentation for the repository.'),
 });
 export type GenerateDocumentationOutput = z.infer<typeof GenerateDocumentationOutputSchema>;
-
-export async function generateDocumentation(input: GenerateDocumentationInput): Promise<GenerateDocumentationOutput> {
-  return generateDocumentationFlow(input);
-}
 
 const prompt = ai.definePrompt({
   name: 'generateDocumentationPrompt',
@@ -63,7 +58,7 @@ The user has provided these additional instructions:
 `,
 });
 
-const generateDocumentationFlow = ai.defineFlow(
+export const generateDocumentationFlow = ai.defineFlow(
   {
     name: 'generateDocumentationFlow',
     inputSchema: GenerateDocumentationInputSchema,

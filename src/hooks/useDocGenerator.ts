@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { generateDocumentation } from "@/ai/flows/generate-documentation";
+import { generateDocumentation } from "@/ai/actions/generate-documentation.action";
 import { fetchRepoContents, fetchFileContent, type FileNode } from "@/ai/tools/fetch-repo-contents";
 import { useToast } from "@/hooks/use-toast";
 
