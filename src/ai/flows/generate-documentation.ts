@@ -11,12 +11,14 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { fetchRepoContents } from '../tools/fetch-repo-contents';
+import { googleAI } from '@genkit-ai/googleai';
 
 const GenerateDocumentationInputSchema = z.object({
   files: z.array(z.object({
     path: z.string(),
     content: z.string(),
   })).describe('An array of file objects, each with a path and its content.'),
+  model: z.string().optional().describe('The model to use for generation.'),
 });
 export type GenerateDocumentationInput = z.infer<typeof GenerateDocumentationInputSchema>;
 
@@ -63,7 +65,7 @@ const generateDocumentationFlow = ai.defineFlow(
     }
   },
   async (input) => {
-    const { output } = await prompt(input);
+    const { output } = await prompt(input, { model: input.model ? googleAI.model(input.model) : undefined });
     return output!;
   }
 );

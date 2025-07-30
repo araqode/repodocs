@@ -13,10 +13,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentationDisplay } from "@/components/DocumentationDisplay";
-import { Github, Loader2, Wand2, Folder, File as FileIcon, ChevronDown, ChevronRight, FolderOpen, Terminal } from "lucide-react";
+import { Github, Loader2, Wand2, Folder, File as FileIcon, ChevronDown, ChevronRight, FolderOpen, Terminal, Sparkles } from "lucide-react";
 import { Skeleton } from "./ui/skeleton";
 import { Checkbox } from "./ui/checkbox";
 import { ScrollArea } from "./ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 const formSchema = z.object({
   repoPath: z.string().min(1, { message: "Please enter a repository path." }).refine(
@@ -26,6 +27,12 @@ const formSchema = z.object({
 });
 
 type FileSelection = { [path: string]: boolean };
+
+const availableModels = [
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
+];
 
 export function DocumentationGenerator() {
   const [documentation, setDocumentation] = useState<string | null>(null);
@@ -38,6 +45,7 @@ export function DocumentationGenerator() {
   const [expandedFolders, setExpandedFolders] = useState<{[path: string]: boolean}>({});
   const [logs, setLogs] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>(availableModels[0].id);
 
 
   const { toast } = useToast();
@@ -190,8 +198,8 @@ export function DocumentationGenerator() {
     }
 
     try {
-      setLogs(prev => [...prev, 'Generating documentation...']);
-      const result = await generateDocumentation({ files: fetchedFiles });
+      setLogs(prev => [...prev, `Generating documentation with ${selectedModel}...`]);
+      const result = await generateDocumentation({ files: fetchedFiles, model: selectedModel });
       if (result.documentation) {
         setDocumentation(result.documentation);
         setLogs(prev => [...prev, 'Documentation generated successfully!']);
@@ -344,19 +352,38 @@ export function DocumentationGenerator() {
             <ScrollArea className="h-72 w-full rounded-md border p-4">
               <FileTreeView nodes={repoTree} />
             </ScrollArea>
-             <Button onClick={handleGenerateDocs} disabled={isLoading || isFetchingContent} className="mt-4 w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90">
-              {isLoading || isFetchingContent ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isFetchingContent ? 'Fetching Files...' : 'Generating...'}
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Generate Docs for Selected Files
-                </>
-              )}
-            </Button>
+             <div className="flex flex-col sm:flex-row items-center gap-4 mt-4">
+                <Button onClick={handleGenerateDocs} disabled={isLoading || isFetchingContent} className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90">
+                {isLoading || isFetchingContent ? (
+                    <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isFetchingContent ? 'Fetching Files...' : 'Generating...'}
+                    </>
+                ) : (
+                    <>
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    Generate Docs for Selected Files
+                    </>
+                )}
+                </Button>
+                <div className="flex items-center gap-2">
+                    <Label htmlFor="model-select" className="flex items-center gap-2 text-sm font-medium">
+                        <Sparkles className="h-4 w-4" /> AI Model
+                    </Label>
+                    <Select value={selectedModel} onValueChange={setSelectedModel}>
+                        <SelectTrigger id="model-select" className="w-full sm:w-[200px]">
+                            <SelectValue placeholder="Select a model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {availableModels.map(model => (
+                                <SelectItem key={model.id} value={model.id}>
+                                    {model.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
           </CardContent>
         </Card>
       )}
