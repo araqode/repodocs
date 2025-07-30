@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
   distDir: ".build",
   rewrites() {
     return [
-      { source: ':root*/_next/:path*', destination: ':root*/:path*' }
+      { source: '/repodocs/_next/:path*', destination: '/repodocs/:path*' }
     ]
   }
 };
