@@ -145,7 +145,7 @@ export async function listGenerativeModels() {
     const generativeModels = allModels.filter(m => m.supportsGenerate && supportedModels.has(m.name));
     
     return generativeModels.map(m => ({
-        id: m.name.split('/').pop()!,
+        id: m.name.split('/')[1]!,
         name: m.label
     }));
 }
