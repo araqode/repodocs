@@ -45,7 +45,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: ./package-lock.json
+          cache: package-lock.json
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Restore cache
