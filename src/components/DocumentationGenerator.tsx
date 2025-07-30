@@ -35,6 +35,21 @@ type Model = {
     name: string;
 };
 
+const CacheStatusIcon = ({ isLoadedFromCache }: { isLoadedFromCache: boolean }) => (
+    <Tooltip>
+      <TooltipTrigger>
+        {isLoadedFromCache 
+            ? <Database className="h-4 w-4 text-muted-foreground" />
+            : <Cloud className="h-4 w-4 text-muted-foreground" />
+        }
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{isLoadedFromCache ? 'Loaded from cache' : 'Fetched from API'}</p>
+      </TooltipContent>
+    </Tooltip>
+);
+
+
 export function DocumentationGenerator() {
   const [documentation, setDocumentation] = useState<string | null>(null);
   const [repoUrl, setRepoUrl] = useState<string>("");
@@ -349,6 +364,7 @@ export function DocumentationGenerator() {
                         {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         {isExpanded ? <FolderOpen className="h-5 w-5 text-primary" /> : <Folder className="h-5 w-5 text-primary" />}
                         <label htmlFor={`folder-${currentPath}`} className="font-medium cursor-pointer">{node.name}</label>
+                        <CacheStatusIcon isLoadedFromCache={isLoadedFromCache} />
                     </div>
                 </div>
                 {isExpanded && node.children && (
@@ -369,6 +385,7 @@ export function DocumentationGenerator() {
               />
               <FileIcon className="h-5 w-5 text-muted-foreground" />
               <label htmlFor={currentPath} className="cursor-pointer">{node.name}</label>
+              <CacheStatusIcon isLoadedFromCache={isLoadedFromCache} />
             </li>
           );
         })}
@@ -465,17 +482,7 @@ export function DocumentationGenerator() {
                     <label htmlFor="root-selector" className="font-medium cursor-pointer">
                       {form.getValues('repoPath')}
                     </label>
-                    <Tooltip>
-                      <TooltipTrigger>
-                          {isLoadedFromCache 
-                              ? <Database className="h-4 w-4 text-muted-foreground" />
-                              : <Cloud className="h-4 w-4 text-muted-foreground" />
-                          }
-                      </TooltipTrigger>
-                      <TooltipContent>
-                          <p>{isLoadedFromCache ? 'Loaded from cache' : 'Fetched from API'}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <CacheStatusIcon isLoadedFromCache={isLoadedFromCache} />
                   </div>
                 </div>
                 <div className="pl-6 border-l border-dashed ml-2 mt-2">
@@ -542,5 +549,3 @@ export function DocumentationGenerator() {
     </>
   );
 }
-
-    
