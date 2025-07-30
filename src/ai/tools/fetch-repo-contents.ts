@@ -2,6 +2,9 @@
 
 import { ai } from "@/ai/genkit";
 import { z } from "zod";
+import { gemini20Flash, gemini15Flash, gemini15Pro } from '@genkit-ai/googleai';
+import { listModels } from 'genkit';
+
 
 export interface FileNode {
   type: 'file' | 'dir';
@@ -134,3 +137,15 @@ export const fetchRepoContents = ai.defineTool(
     }
   }
 );
+
+
+export async function listGenerativeModels() {
+    const allModels = await listModels();
+    const supportedModels = new Set([gemini20Flash.name, gemini15Flash.name, gemini15Pro.name]);
+    const generativeModels = allModels.filter(m => m.supportsGenerate && supportedModels.has(m.name));
+    
+    return generativeModels.map(m => ({
+        id: m.name.split('/').pop()!,
+        name: m.label
+    }));
+}

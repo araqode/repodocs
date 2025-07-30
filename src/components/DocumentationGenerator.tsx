@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { generateDocumentation } from "@/ai/flows/generate-documentation";
-import { fetchRepoContents, fetchFileContent, type FileNode } from "@/ai/tools/fetch-repo-contents";
+import { fetchRepoContents, fetchFileContent, type FileNode, listGenerativeModels } from "@/ai/tools/fetch-repo-contents";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -29,11 +29,10 @@ const formSchema = z.object({
 
 type FileSelection = { [path: string]: boolean };
 
-const availableModels = [
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-];
+type Model = {
+    id: string;
+    name: string;
+};
 
 export function DocumentationGenerator() {
   const [documentation, setDocumentation] = useState<string | null>(null);
@@ -46,8 +45,8 @@ export function DocumentationGenerator() {
   const [expandedFolders, setExpandedFolders] = useState<{[path: string]: boolean}>({});
   const [logs, setLogs] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>(availableModels[0].id);
-
+  const [availableModels, setAvailableModels] = useState<Model[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("");
 
   const { toast } = useToast();
 
@@ -57,6 +56,27 @@ export function DocumentationGenerator() {
       repoPath: "",
     },
   });
+
+  useEffect(() => {
+      async function loadModels() {
+          try {
+              const models = await listGenerativeModels();
+              setAvailableModels(models);
+              if (models.length > 0) {
+                  setSelectedModel(models[0].id);
+              }
+          } catch (error) {
+              console.error("Failed to fetch models:", error);
+              toast({
+                  variant: "destructive",
+                  title: "Failed to load AI models.",
+                  description: "Sticking to default model.",
+              });
+          }
+      }
+      loadModels();
+  }, [toast]);
+
 
   useEffect(() => {
     if (logContainerRef.current) {
