@@ -230,8 +230,54 @@ export function DocumentationGenerator() {
     setFileSelection(prev => ({...prev, [path]: isSelected}));
   };
   
+  const toggleFolderSelection = (nodes: FileNode[], parentPath: string, isSelected: boolean) => {
+    let newSelection = {...fileSelection};
+    
+    function traverse(items: FileNode[], currentBasePath: string) {
+        items.forEach(item => {
+            const path = currentBasePath ? `${currentBasePath}/${item.name}` : item.name;
+            if (item.type === 'file') {
+                newSelection[path] = isSelected;
+            } else if (item.type === 'dir' && item.children) {
+                traverse(item.children, path);
+            }
+        });
+    }
+    
+    traverse(nodes, parentPath);
+    setFileSelection(newSelection);
+  };
+
+
   const toggleFolderExpansion = (path: string) => {
     setExpandedFolders(prev => ({...prev, [path]: !prev[path]}));
+  };
+  
+  const getFolderSelectionState = (nodes: FileNode[], parentPath: string): boolean | 'indeterminate' => {
+    let hasSelectedFile = false;
+    let hasUnselectedFile = false;
+
+    function traverse(items: FileNode[], currentBasePath: string) {
+      for (const item of items) {
+        if (hasSelectedFile && hasUnselectedFile) break;
+        const path = currentBasePath ? `${currentBasePath}/${item.name}` : item.name;
+        if (item.type === 'file') {
+          if (fileSelection[path]) {
+            hasSelectedFile = true;
+          } else {
+            hasUnselectedFile = true;
+          }
+        } else if (item.type === 'dir' && item.children) {
+          traverse(item.children, path);
+        }
+      }
+    }
+
+    traverse(nodes, parentPath);
+
+    if (hasSelectedFile && hasUnselectedFile) return 'indeterminate';
+    if (hasSelectedFile) return true;
+    return false;
   };
 
   const FileTreeView = ({ nodes, parentPath = '' }: { nodes: FileNode[], parentPath?: string }) => {
@@ -241,15 +287,24 @@ export function DocumentationGenerator() {
           const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
           if (node.type === 'dir') {
             const isExpanded = expandedFolders[currentPath];
+            const selectionState = getFolderSelectionState(node.children || [], currentPath);
+
             return (
               <li key={currentPath}>
-                <div 
-                  className="flex items-center gap-2 cursor-pointer py-1"
-                  onClick={() => toggleFolderExpansion(currentPath)}
-                >
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  {isExpanded ? <FolderOpen className="h-5 w-5 text-primary" /> : <Folder className="h-5 w-5 text-primary" />}
-                  <span className="font-medium">{node.name}</span>
+                <div className="flex items-center gap-2 py-1">
+                    <Checkbox
+                        id={`folder-${currentPath}`}
+                        checked={selectionState}
+                        onCheckedChange={(checked) => toggleFolderSelection(node.children || [], currentPath, !!checked)}
+                    />
+                    <div 
+                        className="flex items-center gap-2 cursor-pointer"
+                        onClick={() => toggleFolderExpansion(currentPath)}
+                    >
+                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        {isExpanded ? <FolderOpen className="h-5 w-5 text-primary" /> : <Folder className="h-5 w-5 text-primary" />}
+                        <label htmlFor={`folder-${currentPath}`} className="font-medium cursor-pointer">{node.name}</label>
+                    </div>
                 </div>
                 {isExpanded && node.children && (
                   <div className="pl-6">
