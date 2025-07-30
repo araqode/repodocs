@@ -161,7 +161,7 @@ export function useDocGenerator() {
     });
   }
 
-  async function handleFetchRepoStructure(repoPath: string, path?: string) {
+  async function handleFetchRepoStructure(repoPath: string, path?: string): Promise<FileNode[] | undefined> {
     const cacheKey = `repo-cache-${repoPath}-${path || 'root'}`;
     const cached = getCachedData(cacheKey);
 
@@ -171,7 +171,7 @@ export function useDocGenerator() {
       if (path) {
         setLoadedPaths(prev => ({...prev, [repoPath]: {...(prev[repoPath] || {}), [path]: true}}));
       }
-      return;
+      return cached;
     }
     
     if (path) setLoadedPaths(prev => ({...prev, [repoPath]: {...(prev[repoPath] || {}), [path]: true}}));
@@ -181,6 +181,7 @@ export function useDocGenerator() {
       updateTreeWithNewNodes(repoPath, result, path);
       setCachedData(cacheKey, result);
       setCacheStatus(prev => ({...prev, [repoPath]: {...(prev[repoPath] || {}), [path || 'root']: false}}));
+      return result;
     } catch (error) {
       console.error(`Error fetching repository structure for path "${path}":`, error);
       toast({
@@ -381,20 +382,30 @@ export function useDocGenerator() {
   };
   
   const toggleFolderSelection = (repoPath: string, nodes: FileNode[], isSelected: boolean) => {
-    let newRepoSelection = {...(fileSelection[repoPath] || {})};
+    const newRepoSelection = { ...(fileSelection[repoPath] || {}) };
     
-    function traverse(items: FileNode[]) {
-        items.forEach(item => {
-            if (item.type === 'file') {
-                newRepoSelection[item.path] = isSelected;
-            } else if (item.type === 'dir' && item.children) {
-                traverse(item.children);
+    async function traverse(items: FileNode[]) {
+      for (const item of items) {
+        if (item.type === 'file') {
+          newRepoSelection[item.path] = isSelected;
+        } else if (item.type === 'dir') {
+          let childrenToTraverse = item.children;
+          if (isSelected && (!childrenToTraverse || childrenToTraverse.length === 0)) {
+            const fetchedChildren = await handleFetchRepoStructure(repoPath, item.path);
+            if (fetchedChildren) {
+              childrenToTraverse = fetchedChildren;
             }
-        });
+          }
+          if (childrenToTraverse) {
+            await traverse(childrenToTraverse);
+          }
+        }
+      }
     }
     
-    traverse(nodes);
-    setFileSelection(prev => ({...prev, [repoPath]: newRepoSelection}));
+    traverse(nodes).then(() => {
+        setFileSelection(prev => ({...prev, [repoPath]: newRepoSelection}));
+    });
   };
 
   const toggleFolderExpansion = (repoPath: string, node: FileNode) => {
