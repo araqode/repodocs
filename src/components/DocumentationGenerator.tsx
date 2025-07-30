@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentationDisplay } from "@/components/DocumentationDisplay";
-import { Github, Loader2, Wand2, Folder, File as FileIcon, ChevronDown, ChevronRight, FolderOpen, Terminal, Sparkles } from "lucide-react";
+import { Github, Loader2, Wand2, Folder, File as FileIcon, ChevronDown, ChevronRight, FolderOpen, Terminal, Sparkles, FolderGit2 } from "lucide-react";
 import { Skeleton } from "./ui/skeleton";
 import { Checkbox } from "./ui/checkbox";
 import { ScrollArea } from "./ui/scroll-area";
@@ -299,6 +299,16 @@ export function DocumentationGenerator() {
     if (hasSelectedFile) return true;
     return false;
   };
+  
+  const toggleAllSelection = (isSelected: boolean) => {
+      if (!repoTree) return;
+      toggleFolderSelection(repoTree, '', isSelected);
+  };
+  
+  const getRootSelectionState = (): boolean | 'indeterminate' => {
+      if (!repoTree) return false;
+      return getFolderSelectionState(repoTree, '');
+  };
 
   const FileTreeView = ({ nodes, parentPath = '' }: { nodes: FileNode[], parentPath?: string }) => {
     return (
@@ -426,7 +436,22 @@ export function DocumentationGenerator() {
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-72 w-full rounded-md border p-4">
-              <FileTreeView nodes={repoTree} />
+              <div className="flex items-center gap-2 py-1">
+                <Checkbox
+                  id="root-selector"
+                  checked={getRootSelectionState()}
+                  onCheckedChange={(checked) => toggleAllSelection(!!checked)}
+                />
+                <div className="flex items-center gap-2">
+                  <FolderGit2 className="h-5 w-5 text-primary" />
+                  <label htmlFor="root-selector" className="font-medium cursor-pointer">
+                    {form.getValues('repoPath')}
+                  </label>
+                </div>
+              </div>
+              <div className="pl-6 border-l border-dashed ml-2 mt-2">
+                <FileTreeView nodes={repoTree} />
+              </div>
             </ScrollArea>
              <div className="flex flex-col sm:flex-row items-center gap-4 mt-4">
                 <Button onClick={handleGenerateDocs} disabled={isLoading || isFetchingContent} className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90">
