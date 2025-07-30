@@ -19,7 +19,12 @@ const nextConfig: NextConfig = {
     ],
   },
   basePath: "/repodocs",
-  distDir: ".build"
+  distDir: ".build",
+  rewrites() {
+    return [
+      { source: ':root*/_next/:path*', destination: ':root*/:path*' }
+    ]
+  }
 };
 
 export default nextConfig;
