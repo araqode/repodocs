@@ -26,6 +26,7 @@ type FileTreeProps = {
     toggleFolderSelection: (repoPath: string, nodes: FileNode[], isSelected: boolean) => void;
     toggleFolderExpansion: (repoPath: string, node: FileNode) => void;
     loadedPaths: RepoState<{ [path: string]: boolean }>;
+    toggleSelection: (repoPath: string, path: string, isSelected: boolean) => void;
 };
 
 export function FileTree({
@@ -35,6 +36,7 @@ export function FileTree({
     getRootSelectionState,
     toggleAllSelectionForRepo,
     cacheStatus,
+    toggleSelection,
     ...rest
 }: FileTreeProps) {
     return (
@@ -62,7 +64,7 @@ export function FileTree({
                                     </div>
                                 </div>
                                 <div className="pl-6 border-l border-dashed ml-2 mt-2">
-                                    {repoTrees[repoPath] && <InnerFileTreeView nodes={repoTrees[repoPath]} repoPath={repoPath} cacheStatus={cacheStatus} {...rest} />}
+                                    {repoTrees[repoPath] && <InnerFileTreeView nodes={repoTrees[repoPath]} repoPath={repoPath} cacheStatus={cacheStatus} toggleSelection={toggleSelection} {...rest} />}
                                 </div>
                             </>
                         )}
