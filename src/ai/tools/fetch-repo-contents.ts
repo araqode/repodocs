@@ -12,10 +12,12 @@ export interface FileNode {
   path: string;
   content?: string;
   children?: FileNode[];
+  sha?: string;
 }
 
 const FetchRepoContentsInputSchema = z.object({
   repoPath: z.string().describe('The path of the GitHub repository in owner/repo format.'),
+  path: z.string().optional().describe('The path of the directory to fetch. Fetches root if omitted.'),
 });
 
 const FileNodeSchema: z.ZodType<FileNode> = z.lazy(() =>
@@ -25,6 +27,7 @@ const FileNodeSchema: z.ZodType<FileNode> = z.lazy(() =>
     path: z.string(),
     content: z.string().optional(),
     children: z.array(FileNodeSchema).optional(),
+    sha: z.string().optional(),
   })
 );
 
@@ -64,65 +67,31 @@ export async function fetchFileContent({ owner, repo, path }: { owner: string, r
 }
 
 
-async function getRepoTree(owner: string, repo: string, branch: string = 'main'): Promise<FileNode[]> {
-    const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
-    const { tree } = await fetchFromApi(url);
+async function getRepoTree(owner: string, repo: string, path: string = ''): Promise<FileNode[]> {
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    const contents = await fetchFromApi(url);
 
-    const fileMap: { [path: string]: FileNode } = {};
-    const rootNodes: FileNode[] = [];
-
-    for (const item of tree) {
-        const pathParts = item.path.split('/');
-        let currentLevel = rootNodes;
-        let currentPath = '';
-
-        for (let i = 0; i < pathParts.length; i++) {
-            const part = pathParts[i];
-            currentPath = currentPath ? `${currentPath}/${part}` : part;
-            
-            let node = fileMap[currentPath];
-
-            if (!node) {
-                const isDir = i < pathParts.length - 1 || item.type === 'tree';
-                node = {
-                    name: part,
-                    path: currentPath,
-                    type: isDir ? 'dir' : 'file',
-                };
-
-                if (isDir) {
-                    node.children = [];
-                }
-                
-                fileMap[currentPath] = node;
-
-                if (i === 0) {
-                    rootNodes.push(node);
-                } else {
-                    const parentPath = pathParts.slice(0, i).join('/');
-                    const parentNode = fileMap[parentPath];
-                    if (parentNode && parentNode.children) {
-                        parentNode.children.push(node);
-                    }
-                }
-            }
-
-            if (node.type === 'dir' && node.children) {
-                currentLevel = node.children;
-            }
-        }
+    if (!Array.isArray(contents)) {
+        throw new Error('Unexpected API response format. Expected an array of files/directories.');
     }
-    return rootNodes;
+
+    return contents.map((item: any) => ({
+        name: item.name,
+        path: item.path,
+        type: item.type,
+        sha: item.sha,
+        children: item.type === 'dir' ? [] : undefined,
+    }));
 }
 
 export const fetchRepoContents = ai.defineTool(
   {
     name: "fetchRepoContents",
-    description: "Fetches the file structure of a public GitHub repository.",
+    description: "Fetches the file structure of a directory in a public GitHub repository.",
     inputSchema: FetchRepoContentsInputSchema,
     outputSchema: FetchRepoContentsOutputSchema,
   },
-  async ({ repoPath }) => {
+  async ({ repoPath, path }) => {
     const urlParts = repoPath.split('/');
     if (urlParts.length !== 2) {
       throw new Error('Invalid GitHub repository path. Please use the owner/repo format.');
@@ -130,10 +99,10 @@ export const fetchRepoContents = ai.defineTool(
     const [owner, repo] = urlParts;
     
     try {
-        return await getRepoTree(owner, repo, 'main');
+        return await getRepoTree(owner, repo, path);
     } catch (e) {
-        console.log("Failed to fetch 'main' branch, trying 'master'");
-        return await getRepoTree(owner, repo, 'master');
+        console.error(`Error fetching tree for ${repoPath} at path ${path}:`, e);
+        throw e;
     }
   }
 );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,7 +19,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Checkbox } from "./ui/checkbox";
 import { ScrollArea } from "./ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 const formSchema = z.object({
   repoPath: z.string().min(1, { message: "Please enter a repository path." }).refine(
@@ -35,24 +35,23 @@ type Model = {
     name: string;
 };
 
-const CacheStatusIcon = ({ path, cacheStatus }: { path: string, cacheStatus: {[path: string]: boolean} }) => {
-    const isLoadedFromCache = cacheStatus[path];
+const CacheStatusIcon = ({ isLoadedFromCache }: { isLoadedFromCache?: boolean }) => {
+    if (isLoadedFromCache === undefined) return null;
     
     return (
         <Tooltip>
-        <TooltipTrigger>
-            {isLoadedFromCache 
-                ? <Database className="h-4 w-4 text-muted-foreground" />
-                : <Cloud className="h-4 w-4 text-muted-foreground" />
-            }
-        </TooltipTrigger>
-        <TooltipContent>
-            <p>{isLoadedFromCache ? 'Loaded from cache' : 'Fetched from API'}</p>
-        </TooltipContent>
+            <TooltipTrigger>
+                {isLoadedFromCache 
+                    ? <Database className="h-4 w-4 text-muted-foreground" />
+                    : <Cloud className="h-4 w-4 text-muted-foreground" />
+                }
+            </TooltipTrigger>
+            <TooltipContent>
+                <p>{isLoadedFromCache ? 'Loaded from cache' : 'Fetched from API'}</p>
+            </TooltipContent>
         </Tooltip>
     )
 };
-
 
 export function DocumentationGenerator() {
   const [documentation, setDocumentation] = useState<string | null>(null);
@@ -60,7 +59,7 @@ export function DocumentationGenerator() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingRepo, setIsFetchingRepo] = useState(false);
   const [isFetchingContent, setIsFetchingContent] = useState(false);
-  const [repoTree, setRepoTree] = useState<FileNode[] | null>(null);
+  const [repoTree, setRepoTree] = useState<FileNode[]>([]);
   const [fileSelection, setFileSelection] = useState<FileSelection>({});
   const [expandedFolders, setExpandedFolders] = useState<{[path: string]: boolean}>({});
   const [logs, setLogs] = useState<string[]>([]);
@@ -68,37 +67,35 @@ export function DocumentationGenerator() {
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [cacheStatus, setCacheStatus] = useState<{[path: string]: boolean}>({});
-
+  const [loadedPaths, setLoadedPaths] = useState<{[path: string]: boolean}>({});
+  const [currentRepoPath, setCurrentRepoPath] = useState<string>("");
 
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      repoPath: "",
-    },
+    defaultValues: { repoPath: "" },
   });
 
   useEffect(() => {
-      async function loadModels() {
-          try {
-              const models = await listGenerativeModels();
-              setAvailableModels(models);
-              if (models.length > 0) {
-                  setSelectedModel(models[0].id);
-              }
-          } catch (error) {
-              console.error("Failed to fetch models:", error);
-              toast({
-                  variant: "destructive",
-                  title: "Failed to load AI models.",
-                  description: "Sticking to default model.",
-              });
-          }
+    async function loadModels() {
+      try {
+        const models = await listGenerativeModels();
+        setAvailableModels(models);
+        if (models.length > 0) {
+          setSelectedModel(models[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch models:", error);
+        toast({
+          variant: "destructive",
+          title: "Failed to load AI models.",
+          description: "Sticking to default model.",
+        });
       }
-      loadModels();
+    }
+    loadModels();
   }, [toast]);
-
 
   useEffect(() => {
     if (logContainerRef.current) {
@@ -106,126 +103,117 @@ export function DocumentationGenerator() {
     }
   }, [logs]);
 
-  const getRepoDataFromCache = (path: string) => {
+  const getCachedData = useCallback((key: string) => {
     try {
-      const cachedData = localStorage.getItem(`repo-cache-${path}`);
-      if(cachedData) {
-        return JSON.parse(cachedData);
-      }
+      const cachedData = localStorage.getItem(key);
+      if(cachedData) return JSON.parse(cachedData);
     } catch (error) {
-        console.error("Failed to read from local storage:", error);
-        localStorage.removeItem(`repo-cache-${path}`);
+      console.error("Failed to read from local storage:", error);
+      localStorage.removeItem(key);
     }
     return null;
-  }
+  }, []);
 
-  const setRepoDataToCache = (path: string, data: any) => {
+  const setCachedData = useCallback((key: string, data: any) => {
     try {
-        localStorage.setItem(`repo-cache-${path}`, JSON.stringify(data));
+      localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
-        console.error("Failed to write to local storage:", error);
+      console.error("Failed to write to local storage:", error);
     }
-  }
+  }, []);
 
-  const checkCacheStatus = (nodes: FileNode[], repoPath: string) => {
-    const status: {[path: string]: boolean} = {};
-    const cachedRepo = getRepoDataFromCache(repoPath);
-    
-    function traverse(items: FileNode[], currentPath = '') {
-        items.forEach(item => {
-            const path = currentPath ? `${currentPath}/${item.name}` : item.name;
-            status[path] = !!cachedRepo; // Simplified: if repo is cached, all its initial structure is.
-            if (item.children) {
-                traverse(item.children, path);
-            }
-        });
-    }
-    traverse(nodes);
-    setCacheStatus(status);
+  const resetState = () => {
+    setDocumentation(null);
+    setRepoTree([]);
+    setFileSelection({});
+    setExpandedFolders({});
+    setCacheStatus({});
+    setLoadedPaths({});
+    setCurrentRepoPath("");
+    setRepoUrl("");
   };
 
+  async function handleFetchRepoStructure(repoPath: string, path?: string) {
+    const cacheKey = `repo-cache-${repoPath}-${path || 'root'}`;
+    const cached = getCachedData(cacheKey);
 
-  async function handleFetchRepo(path: string) {
-    setIsFetchingRepo(true);
-    setDocumentation(null);
-    setRepoTree(null);
-
-    const cached = getRepoDataFromCache(path);
     if (cached) {
-      setRepoTree(cached);
-      initializeSelection(cached);
-      checkCacheStatus(cached, path);
-      setIsFetchingRepo(false);
+      updateTreeWithNewNodes(cached, path);
+      setCacheStatus(prev => ({...prev, [path || 'root']: true}));
+      if (path) {
+        setLoadedPaths(prev => ({...prev, [path]: true}));
+      }
       return;
     }
+    
+    if (path) setLoadedPaths(prev => ({...prev, [path]: true}));
 
     try {
-      const result = await fetchRepoContents({ repoPath: path });
-      setRepoTree(result);
-      initializeSelection(result);
-      checkCacheStatus(result, path);
-      setRepoDataToCache(path, result);
+      const result = await fetchRepoContents({ repoPath, path });
+      updateTreeWithNewNodes(result, path);
+      setCachedData(cacheKey, result);
+      setCacheStatus(prev => ({...prev, [path || 'root']: false}));
     } catch (error) {
-      console.error("Error fetching repository:", error);
+      console.error(`Error fetching repository structure for path "${path}":`, error);
       toast({
         variant: "destructive",
         title: "Failed to fetch repository.",
         description: error instanceof Error ? error.message : "An unknown error occurred.",
       });
-    } finally {
-      setIsFetchingRepo(false);
+      if (path) setLoadedPaths(prev => ({...prev, [path]: false})); // Allow retry
     }
   }
+  
+  const updateTreeWithNewNodes = (nodes: FileNode[], parentPath?: string) => {
+    const newSelection = {...fileSelection};
+    nodes.forEach(node => {
+        if(node.type === 'file') {
+            newSelection[node.path] = fileSelection[node.path] || false;
+        }
+    });
+    setFileSelection(newSelection);
 
-  const initializeSelection = (nodes: FileNode[]) => {
-    const selection: FileSelection = {};
-    const expansion: {[path: string]: boolean} = {};
-    
-    function traverse(items: FileNode[], currentPath = '') {
-        items.forEach(item => {
-            const path = currentPath ? `${currentPath}/${item.name}` : item.name;
-            if (item.type === 'file') {
-                selection[path] = false;
-            } else if (item.type === 'dir' && item.children) {
-                if (item.children.length > 0) {
-                    expansion[path] = true; 
-                }
-                traverse(item.children, path);
-            }
-        });
+    if (!parentPath) {
+      setRepoTree(nodes);
+      return;
     }
-    traverse(nodes);
-    setFileSelection(selection);
-    setExpandedFolders(expansion);
+    
+    setRepoTree(prevTree => {
+        const updateChildren = (items: FileNode[]): FileNode[] => {
+            return items.map(item => {
+                if (item.path === parentPath) {
+                    return {...item, children: nodes};
+                }
+                if (item.children && item.children.length > 0) {
+                    return {...item, children: updateChildren(item.children)};
+                }
+                return item;
+            });
+        };
+        return updateChildren(prevTree);
+    });
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    await handleFetchRepo(values.repoPath);
+    resetState();
+    setIsFetchingRepo(true);
+    setCurrentRepoPath(values.repoPath);
     setRepoUrl(`https://github.com/${values.repoPath}`);
+    await handleFetchRepoStructure(values.repoPath);
+    setIsFetchingRepo(false);
   }
 
   async function handleGenerateDocs() {
-    if (!repoTree) return;
+    if (repoTree.length === 0) return;
     
     setIsLoading(true);
     setDocumentation(null);
     setLogs([]);
     setIsFetchingContent(true);
 
-    const selectedFilesToFetch: { path: string }[] = [];
-    
-    function findSelectedFiles(nodes: FileNode[], currentPath = '') {
-      nodes.forEach(node => {
-        const path = currentPath ? `${currentPath}/${node.name}` : node.name;
-        if (node.type === 'file' && fileSelection[path]) {
-          selectedFilesToFetch.push({ path });
-        } else if (node.type === 'dir' && node.children) {
-          findSelectedFiles(node.children, path);
-        }
-      });
-    }
-
-    findSelectedFiles(repoTree);
+    const selectedFilesToFetch: { path: string }[] = Object.entries(fileSelection)
+        .filter(([,isSelected]) => isSelected)
+        .map(([path]) => ({path}));
 
     if(selectedFilesToFetch.length === 0) {
         toast({
@@ -300,113 +288,118 @@ export function DocumentationGenerator() {
     setFileSelection(prev => ({...prev, [path]: isSelected}));
   };
   
-  const toggleFolderSelection = (nodes: FileNode[], parentPath: string, isSelected: boolean) => {
+  const toggleFolderSelection = (nodes: FileNode[], isSelected: boolean) => {
     let newSelection = {...fileSelection};
     
-    function traverse(items: FileNode[], currentBasePath: string) {
+    function traverse(items: FileNode[]) {
         items.forEach(item => {
-            const path = currentBasePath ? `${currentBasePath}/${item.name}` : item.name;
             if (item.type === 'file') {
-                newSelection[path] = isSelected;
+                newSelection[item.path] = isSelected;
             } else if (item.type === 'dir' && item.children) {
-                traverse(item.children, path);
+                traverse(item.children);
             }
         });
     }
     
-    traverse(nodes, parentPath);
+    traverse(nodes);
     setFileSelection(newSelection);
   };
 
-
-  const toggleFolderExpansion = (path: string) => {
+  const toggleFolderExpansion = (node: FileNode) => {
+    const { path, children } = node;
+    if (!children || (children.length === 0 && !loadedPaths[path])) {
+        handleFetchRepoStructure(currentRepoPath, path);
+    }
     setExpandedFolders(prev => ({...prev, [path]: !prev[path]}));
   };
   
-  const getFolderSelectionState = (nodes: FileNode[], parentPath: string): boolean | 'indeterminate' => {
+  const getFolderSelectionState = (nodes?: FileNode[]): boolean | 'indeterminate' => {
+    if (!nodes || nodes.length === 0) return false;
     let hasSelectedFile = false;
     let hasUnselectedFile = false;
 
-    function traverse(items: FileNode[], currentBasePath: string) {
+    function traverse(items: FileNode[]) {
       for (const item of items) {
         if (hasSelectedFile && hasUnselectedFile) break;
-        const path = currentBasePath ? `${currentBasePath}/${item.name}` : item.name;
         if (item.type === 'file') {
-          if (fileSelection[path]) {
+          if (fileSelection[item.path]) {
             hasSelectedFile = true;
-          } else {
+          } else if (fileSelection[item.path] === false) {
             hasUnselectedFile = true;
           }
         } else if (item.type === 'dir' && item.children) {
-          traverse(item.children, path);
+          traverse(item.children);
         }
       }
     }
-
-    traverse(nodes, parentPath);
-
+    traverse(nodes);
+    
     if (hasSelectedFile && hasUnselectedFile) return 'indeterminate';
-    if (hasSelectedFile) return true;
+    if (hasSelectedFile && !hasUnselectedFile) return true;
     return false;
   };
   
   const toggleAllSelection = (isSelected: boolean) => {
       if (!repoTree) return;
-      toggleFolderSelection(repoTree, '', isSelected);
+      toggleFolderSelection(repoTree, isSelected);
   };
   
   const getRootSelectionState = (): boolean | 'indeterminate' => {
       if (!repoTree) return false;
-      return getFolderSelectionState(repoTree, '');
+      return getFolderSelectionState(repoTree);
   };
 
   const FileTreeView = ({ nodes, parentPath = '' }: { nodes: FileNode[], parentPath?: string }) => {
     return (
       <ul className="space-y-1">
         {nodes.map(node => {
-          const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
           if (node.type === 'dir') {
-            const isExpanded = expandedFolders[currentPath];
-            const selectionState = getFolderSelectionState(node.children || [], currentPath);
+            const isExpanded = expandedFolders[node.path];
+            const selectionState = getFolderSelectionState(node.children);
 
             return (
-              <li key={currentPath}>
+              <li key={node.path}>
                 <div className="flex items-center gap-2 py-1">
                     <Checkbox
-                        id={`folder-${currentPath}`}
+                        id={`folder-${node.path}`}
                         checked={selectionState}
-                        onCheckedChange={(checked) => toggleFolderSelection(node.children || [], currentPath, !!checked)}
+                        onCheckedChange={(checked) => toggleFolderSelection(node.children || [], !!checked)}
                         aria-label={`Select folder ${node.name}`}
                     />
                     <div 
                         className="flex items-center gap-2 cursor-pointer"
-                        onClick={() => toggleFolderExpansion(currentPath)}
+                        onClick={() => toggleFolderExpansion(node)}
                     >
-                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        {loadedPaths[node.path] && (!node.children || node.children.length === 0)
+                          ? <ChevronRight className="h-4 w-4 opacity-50" />
+                          : isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+                        }
                         {isExpanded ? <FolderOpen className="h-5 w-5 text-primary" /> : <Folder className="h-5 w-5 text-primary" />}
-                        <label htmlFor={`folder-${currentPath}`} className="font-medium cursor-pointer">{node.name}</label>
-                        <CacheStatusIcon path={currentPath} cacheStatus={cacheStatus} />
+                        <label htmlFor={`folder-${node.path}`} className="font-medium cursor-pointer">{node.name}</label>
+                        <CacheStatusIcon isLoadedFromCache={cacheStatus[node.path]} />
                     </div>
                 </div>
-                {isExpanded && node.children && (
+                {isExpanded && node.children && node.children.length > 0 && (
                   <div className="pl-6">
-                    <FileTreeView nodes={node.children} parentPath={currentPath} />
+                    <FileTreeView nodes={node.children} parentPath={node.path} />
                   </div>
+                )}
+                 {isExpanded && !node.children?.length && loadedPaths[node.path] && (
+                    <div className="pl-12 text-muted-foreground italic text-sm">empty</div>
                 )}
               </li>
             );
           }
           return (
-            <li key={currentPath} className="flex items-center gap-2 pl-6 py-1">
+            <li key={node.path} className="flex items-center gap-2 pl-6 py-1">
               <Checkbox
-                id={currentPath}
-                checked={!!fileSelection[currentPath]}
-                onCheckedChange={(checked) => toggleSelection(currentPath, !!checked)}
+                id={node.path}
+                checked={!!fileSelection[node.path]}
+                onCheckedChange={(checked) => toggleSelection(node.path, !!checked)}
                 aria-label={`Select file ${node.name}`}
               />
               <FileIcon className="h-5 w-5 text-muted-foreground" />
-              <label htmlFor={currentPath} className="cursor-pointer">{node.name}</label>
-              <CacheStatusIcon path={currentPath} cacheStatus={cacheStatus} />
+              <label htmlFor={node.path} className="cursor-pointer">{node.name}</label>
             </li>
           );
         })}
@@ -480,7 +473,7 @@ export function DocumentationGenerator() {
       
       {isFetchingRepo && <div className="mt-8 text-center"> <Loader2 className="h-8 w-8 animate-spin mx-auto" /> <p>Fetching repository structure...</p></div>}
 
-      {repoTree && !isFetchingRepo && (
+      {repoTree.length > 0 && !isFetchingRepo && (
         <Card className="mt-8 shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Select Files for Documentation</CardTitle>
@@ -503,7 +496,7 @@ export function DocumentationGenerator() {
                     <label htmlFor="root-selector" className="font-medium cursor-pointer">
                       {form.getValues('repoPath')}
                     </label>
-                    <CacheStatusIcon path={form.getValues('repoPath')} cacheStatus={cacheStatus} />
+                    <CacheStatusIcon isLoadedFromCache={cacheStatus['root']} />
                   </div>
                 </div>
                 <div className="pl-6 border-l border-dashed ml-2 mt-2">
