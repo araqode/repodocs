@@ -19,9 +19,9 @@ import { Checkbox } from "./ui/checkbox";
 import { ScrollArea } from "./ui/scroll-area";
 
 const formSchema = z.object({
-  repoUrl: z.string().url({ message: "Please enter a valid GitHub repository URL." }).refine(
-    (url) => url.startsWith("https://github.com/"),
-    "URL must be a GitHub repository link."
+  repoPath: z.string().min(1, { message: "Please enter a repository path." }).refine(
+    (path) => /^[a-zA-Z0-9-]+\/[a-zA-Z0-9-._]+$/.test(path),
+    "Please enter a valid `owner/repo` path."
   ),
 });
 
@@ -41,29 +41,29 @@ export function DocumentationGenerator() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      repoUrl: "",
+      repoPath: "",
     },
   });
 
-  const getRepoDataFromCache = (url: string) => {
-    const cachedData = localStorage.getItem(`repo-cache-${url}`);
+  const getRepoDataFromCache = (path: string) => {
+    const cachedData = localStorage.getItem(`repo-cache-${path}`);
     if(cachedData) {
       return JSON.parse(cachedData);
     }
     return null;
   }
 
-  const setRepoDataToCache = (url: string, data: any) => {
-    localStorage.setItem(`repo-cache-${url}`, JSON.stringify(data));
+  const setRepoDataToCache = (path: string, data: any) => {
+    localStorage.setItem(`repo-cache-${path}`, JSON.stringify(data));
   }
 
 
-  async function handleFetchRepo(url: string) {
+  async function handleFetchRepo(path: string) {
     setIsFetchingRepo(true);
     setDocumentation(null);
     setRepoTree(null);
 
-    const cached = getRepoDataFromCache(url);
+    const cached = getRepoDataFromCache(path);
     if (cached) {
       setRepoTree(cached);
       initializeSelection(cached);
@@ -72,10 +72,10 @@ export function DocumentationGenerator() {
     }
 
     try {
-      const result = await fetchRepoContents({ repoUrl: url });
+      const result = await fetchRepoContents({ repoPath: path });
       setRepoTree(result);
       initializeSelection(result);
-      setRepoDataToCache(url, result);
+      setRepoDataToCache(path, result);
     } catch (error) {
       console.error("Error fetching repository:", error);
       toast({
@@ -111,8 +111,8 @@ export function DocumentationGenerator() {
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    await handleFetchRepo(values.repoUrl);
-    setRepoUrl(values.repoUrl);
+    await handleFetchRepo(values.repoPath);
+    setRepoUrl(`https://github.com/${values.repoPath}`);
   }
 
   async function handleGenerateDocs() {
@@ -250,7 +250,7 @@ export function DocumentationGenerator() {
             Repository Input
           </CardTitle>
           <CardDescription>
-            Enter the URL of a public GitHub repository to analyze its structure.
+            Enter the repository path in `owner/repo` format to analyze its structure.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -258,12 +258,12 @@ export function DocumentationGenerator() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="repoUrl"
+                name="repoPath"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>GitHub Repository URL</FormLabel>
+                    <FormLabel>GitHub Repository Path</FormLabel>
                     <FormControl>
-                      <Input placeholder="https://github.com/user/repo" {...field} />
+                      <Input placeholder="e.g. genkit-ai/genkit" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -12,7 +12,7 @@ export interface FileNode {
 }
 
 const FetchRepoContentsInputSchema = z.object({
-  repoUrl: z.string().url().describe('The URL of the GitHub repository.'),
+  repoPath: z.string().describe('The path of the GitHub repository in owner/repo format.'),
 });
 
 const FileNodeSchema: z.ZodType<FileNode> = z.lazy(() =>
@@ -117,10 +117,10 @@ export const fetchRepoContents = ai.defineTool(
     inputSchema: FetchRepoContentsInputSchema,
     outputSchema: FetchRepoContentsOutputSchema,
   },
-  async ({ repoUrl }) => {
-    const urlParts = repoUrl.replace('https://github.com/', '').split('/');
-    if (urlParts.length < 2) {
-      throw new Error('Invalid GitHub repository URL.');
+  async ({ repoPath }) => {
+    const urlParts = repoPath.split('/');
+    if (urlParts.length !== 2) {
+      throw new Error('Invalid GitHub repository path. Please use the owner/repo format.');
     }
     const [owner, repo] = urlParts;
     
