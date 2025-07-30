@@ -28,6 +28,8 @@ type ApiKeys = {
 
 const defaultPrompt = `Please provide a high-level overview of the project, including its purpose and key features. Then, for each file, describe its role and functionality. Finally, detail the relationships and interactions between the different files and components.`;
 
+const GITHUB_API_THROTTLE_MS = 200;
+
 export function useDocGenerator() {
   const [documentation, setDocumentation] = useState<string | null>(null);
   const [generatedRepoUrl, setGeneratedRepoUrl] = useState<string>("");
@@ -143,6 +145,7 @@ export function useDocGenerator() {
     if (path) setLoadedPaths(prev => ({...prev, [repoPath]: {...(prev[repoPath] || {}), [path]: true}}));
 
     try {
+      await new Promise(resolve => setTimeout(resolve, GITHUB_API_THROTTLE_MS));
       const result = await fetchRepoContents({ repoPath, path, apiKey: apiKeys.github });
       updateTreeWithNewNodes(repoPath, result, path);
       setCachedData(cacheKey, result);
@@ -278,6 +281,7 @@ export function useDocGenerator() {
         } else {
             setLogs(prev => [...prev, `  [API] Fetching ${filePath}...`]);
             try {
+                await new Promise(resolve => setTimeout(resolve, GITHUB_API_THROTTLE_MS));
                 const content = await fetchFileContent({ owner: owner!, repo: repo!, path: file.path, apiKey: apiKeys.github });
                 const size = new Blob([content]).size;
                 fetchedFiles.push({ path: filePath, content });
@@ -309,12 +313,14 @@ export function useDocGenerator() {
 
     // Step 2: Generating documentation
     try {
-      setLogs(prev => [...prev, `Step 2: Generating documentation with AI...`]);
+      setLogs(prev => [...prev, `Step 2: Starting documentation generation with AI...`]);
+      setLogs(prev => [...prev, `  [AI] Summarizing ${fetchedFiles.length} file(s)...`]);
       const result = await generateDocumentation({ 
         files: fetchedFiles, 
         userPrompt: editablePrompt,
         apiKey: apiKeys.gemini 
       });
+      setLogs(prev => [...prev, `  [AI] Synthesizing final documentation...`]);
       if (result.documentation) {
         setDocumentation(result.documentation);
         setLogs(prev => [...prev, 'Step 2: Documentation generated successfully!']);

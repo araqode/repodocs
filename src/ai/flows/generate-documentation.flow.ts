@@ -122,8 +122,10 @@ export const generateDocumentationFlow = ai.defineFlow(
     }
 
     // Step 1: Summarize each file individually (Map step) - SEQUENTIALLY
+    console.log("Starting file summarization step...");
     const summaries: z.infer<typeof FileSummarySchema>[] = [];
     for (const file of input.files) {
+      console.log(`Summarizing file: ${file.path}`);
       const summaryResponse = await summarizeFilePrompt(
         { path: file.path, content: file.content },
         { plugins }
@@ -131,9 +133,13 @@ export const generateDocumentationFlow = ai.defineFlow(
       if (summaryResponse.output) {
         summaries.push(summaryResponse.output);
       }
+      // Simple delay to help with rate-limiting
+      await new Promise(resolve => setTimeout(resolve, 200)); 
     }
+    console.log("File summarization complete.");
 
     // Step 2: Synthesize the final documentation from summaries (Reduce step)
+    console.log("Starting documentation synthesis step...");
     const finalDocumentationResponse = await synthesizeDocumentationPrompt(
       {
         summaries: summaries,
@@ -141,6 +147,7 @@ export const generateDocumentationFlow = ai.defineFlow(
       },
       { plugins }
     );
+    console.log("Documentation synthesis complete.");
     
     return finalDocumentationResponse.output!;
   }
