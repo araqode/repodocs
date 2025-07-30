@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
     ],
   },
   basePath: "/repodocs",
+  distDir: 'build'
 };
 
 export default nextConfig;
