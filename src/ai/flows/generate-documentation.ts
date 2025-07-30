@@ -54,6 +54,13 @@ const generateDocumentationFlow = ai.defineFlow(
     name: 'generateDocumentationFlow',
     inputSchema: GenerateDocumentationInputSchema,
     outputSchema: GenerateDocumentationOutputSchema,
+    retry: {
+      maxAttempts: 3,
+      backoff: {
+        duration: 2000,
+        factor: 2
+      }
+    }
   },
   async (input) => {
     const { output } = await prompt(input);
