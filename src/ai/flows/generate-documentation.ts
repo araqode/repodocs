@@ -18,7 +18,6 @@ const GenerateDocumentationInputSchema = z.object({
     content: z.string(),
   })).describe('An array of file objects, each with a path and its content.'),
   userPrompt: z.string().optional().describe('Additional user instructions to refine the documentation.'),
-  model: z.string().optional().describe('The model to use for generation.'),
   apiKey: z.string().optional().describe('Gemini API key')
 });
 export type GenerateDocumentationInput = z.infer<typeof GenerateDocumentationInputSchema>;
@@ -75,7 +74,7 @@ const generateDocumentationFlow = ai.defineFlow(
   },
   async (input) => {
     const customAI = googleAI({apiKey: input.apiKey || undefined});
-    const model = input.model ? customAI.model(input.model) : undefined;
+    const model = customAI.model('gemini-1.5-flash'); // Use a default model
     const { output } = await prompt(input, { model, plugins: [customAI] });
     return output!;
   }

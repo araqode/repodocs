@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { generateDocumentation } from "@/ai/flows/generate-documentation";
-import { fetchRepoContents, fetchFileContent, type FileNode, listGenerativeModels } from "@/ai/tools/fetch-repo-contents";
+import { fetchRepoContents, fetchFileContent, type FileNode } from "@/ai/tools/fetch-repo-contents";
 import { useToast } from "@/hooks/use-toast";
 
 const repoFormSchema = z.object({
@@ -20,11 +20,6 @@ type FileSelection = { [path: string]: boolean };
 type RepoFileSelection = { [repoPath: string]: FileSelection };
 type RepoTree = { [repoPath: string]: FileNode[] };
 type RepoState<T> = { [repoPath: string]: T };
-
-type Model = {
-    id: string;
-    name: string;
-};
 
 type ApiKeys = {
     gemini: string;
@@ -45,8 +40,6 @@ export function useDocGenerator() {
   const [expandedFolders, setExpandedFolders] = useState<RepoState<{[path: string]: boolean}>>({});
   const [logs, setLogs] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement | null>(null);
-  const [availableModels, setAvailableModels] = useState<Model[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>("");
   const [cacheStatus, setCacheStatus] = useState<RepoState<{[path: string]: boolean}>>({});
   const [loadedPaths, setLoadedPaths] = useState<RepoState<{[path: string]: boolean}>>({});
   const [fileSizes, setFileSizes] = useState<RepoState<{[path: string]: number}>>({});
@@ -69,33 +62,6 @@ export function useDocGenerator() {
       setApiKeys(storedKeys);
     }
   }, []);
-
-  useEffect(() => {
-    async function loadModels() {
-       if (!apiKeys.gemini) {
-        setAvailableModels([]);
-        setSelectedModel("");
-        return;
-      }
-      try {
-        const models = await listGenerativeModels({apiKey: apiKeys.gemini});
-        setAvailableModels(models);
-        if (models.length > 0 && models.some(m => m.id === selectedModel) === false) {
-          setSelectedModel(models[0].id);
-        }
-      } catch (error) {
-        console.error("Failed to fetch models:", error);
-        toast({
-          variant: "destructive",
-          title: "Failed to load AI models.",
-          description: "Please check your Gemini API key.",
-        });
-        setAvailableModels([]);
-        setSelectedModel("");
-      }
-    }
-    loadModels();
-  }, [toast, apiKeys.gemini]);
 
   useEffect(() => {
     if (logContainerRef.current) {
@@ -339,11 +305,10 @@ export function useDocGenerator() {
     }
 
     try {
-      setLogs(prev => [...prev, `Generating documentation with ${selectedModel}...`]);
+      setLogs(prev => [...prev, `Generating documentation...`]);
       const result = await generateDocumentation({ 
         files: fetchedFiles, 
         userPrompt: editablePrompt,
-        model: selectedModel, 
         apiKey: apiKeys.gemini 
       });
       if (result.documentation) {
@@ -478,9 +443,6 @@ export function useDocGenerator() {
     expandedFolders,
     logs,
     logContainerRef,
-    availableModels,
-    selectedModel,
-    setSelectedModel,
     cacheStatus,
     loadedPaths,
     documentation,

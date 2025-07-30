@@ -33,9 +33,6 @@ export function DocumentationGenerator() {
     onGenerateClick,
     isLoading,
     isFetchingContent,
-    availableModels,
-    selectedModel,
-    setSelectedModel,
     documentation,
     logs,
     generatedRepoUrl,
@@ -119,9 +116,6 @@ export function DocumentationGenerator() {
               onGenerateClick={onGenerateClick}
               isLoading={isLoading}
               isFetchingContent={isFetchingContent}
-              availableModels={availableModels}
-              selectedModel={selectedModel}
-              setSelectedModel={setSelectedModel}
             />
           </CardContent>
         </Card>

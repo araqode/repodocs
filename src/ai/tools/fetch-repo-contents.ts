@@ -2,9 +2,6 @@
 
 import { ai } from "@/ai/genkit";
 import { z } from "zod";
-import { gemini20Flash, gemini15Flash, gemini15Pro, googleAI } from '@genkit-ai/googleai';
-import { listModels } from 'genkit';
-
 
 export interface FileNode {
   type: 'file' | 'dir';
@@ -107,16 +104,3 @@ export const fetchRepoContents = ai.defineTool(
     }
   }
 );
-
-
-export async function listGenerativeModels({apiKey}: {apiKey?: string}) {
-    const customAI = googleAI({apiKey: apiKey || undefined});
-    const allModels = await listModels({plugins: [customAI]});
-    const supportedModels = new Set([gemini20Flash.name, gemini15Flash.name, gemini15Pro.name]);
-    const generativeModels = allModels.filter(m => m.supportsGenerate && supportedModels.has(m.name));
-    
-    return generativeModels.map(m => ({
-        id: m.name.split('/')[1]!,
-        name: m.label
-    }));
-}
