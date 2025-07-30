@@ -40,7 +40,7 @@ async function fetchFromApi(url: string) {
         'Accept': 'application/vnd.github.v3+json',
     };
     if (GITHUB_API_TOKEN) {
-        headers['Authorization'] = `token ${GITHUB_API_TOKEN}`;
+        headers['Authorization'] = `Bearer ${GITHUB_API_TOKEN}`;
     }
 
     const response = await fetch(url, { headers });
