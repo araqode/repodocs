@@ -247,7 +247,13 @@ export function useDocGenerator() {
     setIsLoading(true);
     setDocumentation(null);
     setLogs([]);
+    setGeneratedRepoUrl(repoPaths.map(p => `https://github.com/${p}`).join(', '));
+    
+    const fetchedFiles: { path: string, content: string }[] = [];
+
+    // Step 1: Fetching file contents
     setIsFetchingContent(true);
+    setLogs(prev => [...prev, "Step 1: Fetching content for selected files..."]);
 
     const selectedFilesToFetch: {repoPath: string, path: string}[] = [];
     repoPaths.forEach(repoPath => {
@@ -257,10 +263,6 @@ export function useDocGenerator() {
             .map(([path]) => ({repoPath, path}));
         selectedFilesToFetch.push(...selected);
     });
-    
-    setGeneratedRepoUrl(repoPaths.map(p => `https://github.com/${p}`).join(', '));
-
-    const fetchedFiles: { path: string, content: string }[] = [];
 
     for (const file of selectedFilesToFetch) {
         const [owner, repo] = file.repoPath.split('/');
@@ -272,40 +274,42 @@ export function useDocGenerator() {
         if (cachedContent && cachedContent.content) {
             fetchedFiles.push({ path: filePath, content: cachedContent.content });
             setFileSizes(prev => ({ ...prev, [file.repoPath]: { ...(prev[file.repoPath] || {}), [file.path]: cachedContent.size } }));
-            setLogs(prev => [...prev, `Using cached content for ${filePath}.`]);
+            setLogs(prev => [...prev, `  [CACHE] Using cached content for ${filePath}.`]);
         } else {
-            setLogs(prev => [...prev, `Fetching ${filePath}...`]);
+            setLogs(prev => [...prev, `  [API] Fetching ${filePath}...`]);
             try {
                 const content = await fetchFileContent({ owner: owner!, repo: repo!, path: file.path, apiKey: apiKeys.github });
                 const size = new Blob([content]).size;
                 fetchedFiles.push({ path: filePath, content });
                 setCachedData(cacheKey, { content, size });
                 setFileSizes(prev => ({ ...prev, [file.repoPath]: { ...(prev[file.repoPath] || {}), [file.path]: size } }));
-                setLogs(prev => [...prev, `Fetched ${filePath} successfully.`]);
             } catch (error) {
-                setLogs(prev => [...prev, `Failed to fetch ${filePath}.`]);
+                const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+                setLogs(prev => [...prev, `  [ERROR] Failed to fetch ${filePath}: ${errorMessage}`]);
                 toast({
                     variant: "destructive",
                     title: `Failed to fetch ${file.path}`,
-                    description: error instanceof Error ? error.message : "An unknown error occurred.",
+                    description: errorMessage,
                 });
             }
         }
     }
+    setLogs(prev => [...prev, "Step 1: Finished fetching file contents."]);
     setIsFetchingContent(false);
     
     if (fetchedFiles.length === 0) {
         toast({
             variant: "destructive",
             title: "Failed to fetch content",
-            description: "Could not fetch content for any of the selected files.",
+            description: "Could not fetch content for any of the selected files. Check logs for details.",
         });
         setIsLoading(false);
         return;
     }
 
+    // Step 2: Generating documentation
     try {
-      setLogs(prev => [...prev, `Generating documentation...`]);
+      setLogs(prev => [...prev, `Step 2: Generating documentation with AI...`]);
       const result = await generateDocumentation({ 
         files: fetchedFiles, 
         userPrompt: editablePrompt,
@@ -313,7 +317,7 @@ export function useDocGenerator() {
       });
       if (result.documentation) {
         setDocumentation(result.documentation);
-        setLogs(prev => [...prev, 'Documentation generated successfully!']);
+        setLogs(prev => [...prev, 'Step 2: Documentation generated successfully!']);
         toast({
             title: "Success!",
             description: "Documentation generated successfully.",
@@ -324,7 +328,7 @@ export function useDocGenerator() {
     } catch (error) {
       console.error("Error generating documentation:", error);
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-       setLogs(prev => [...prev, `Error: ${errorMessage}`]);
+      setLogs(prev => [...prev, `  [ERROR] ${errorMessage}`]);
       toast({
         variant: "destructive",
         title: "Uh oh! Something went wrong.",
@@ -355,7 +359,7 @@ export function useDocGenerator() {
           newRepoSelection[item.path] = isSelected;
         } else if (item.type === 'dir') {
           let childrenToTraverse = item.children;
-          if (isSelected && (!childrenToTraverse || childrenToTraverse.length === 0)) {
+          if (isSelected && (!childrenToTraverse || childrenToTraverse.length === 0) && !loadedPaths[repoPath]?.[item.path]) {
             const fetchedChildren = await handleFetchRepoStructure(repoPath, item.path);
             if (fetchedChildren) {
               childrenToTraverse = fetchedChildren;
@@ -468,3 +472,5 @@ export function useDocGenerator() {
     setEditablePrompt,
   };
 }
+
+    
