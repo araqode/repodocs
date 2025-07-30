@@ -244,18 +244,29 @@ export function useDocGenerator() {
 
     for (const file of selectedFilesToFetch) {
         const [owner, repo] = file.repoPath.split('/');
-        setLogs(prev => [...prev, `Fetching ${file.repoPath}/${file.path}...`]);
-        try {
-            const content = await fetchFileContent({ owner, repo, path: file.path });
-            fetchedFiles.push({ path: `${file.repoPath}/${file.path}`, content });
-            setLogs(prev => [...prev, `Fetched ${file.repoPath}/${file.path} successfully.`]);
-        } catch (error) {
-            setLogs(prev => [...prev, `Failed to fetch ${file.repoPath}/${file.path}.`]);
-            toast({
-                variant: "destructive",
-                title: `Failed to fetch ${file.path}`,
-                description: error instanceof Error ? error.message : "An unknown error occurred.",
-            });
+        const filePath = `${file.repoPath}/${file.path}`;
+        const cacheKey = `file-content-cache-${filePath}`;
+        
+        const cachedContent = getCachedData(cacheKey);
+
+        if (cachedContent) {
+            fetchedFiles.push({ path: filePath, content: cachedContent });
+            setLogs(prev => [...prev, `Using cached content for ${filePath}.`]);
+        } else {
+            setLogs(prev => [...prev, `Fetching ${filePath}...`]);
+            try {
+                const content = await fetchFileContent({ owner, repo, path: file.path });
+                fetchedFiles.push({ path: filePath, content });
+                setCachedData(cacheKey, content);
+                setLogs(prev => [...prev, `Fetched ${filePath} successfully.`]);
+            } catch (error) {
+                setLogs(prev => [...prev, `Failed to fetch ${filePath}.`]);
+                toast({
+                    variant: "destructive",
+                    title: `Failed to fetch ${file.path}`,
+                    description: error instanceof Error ? error.message : "An unknown error occurred.",
+                });
+            }
         }
     }
     setIsFetchingContent(false);
