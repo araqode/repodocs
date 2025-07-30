@@ -80,7 +80,7 @@ export function useDocGenerator() {
       try {
         const models = await listGenerativeModels({apiKey: apiKeys.gemini});
         setAvailableModels(models);
-        if (models.length > 0) {
+        if (models.length > 0 && models.some(m => m.id === selectedModel) === false) {
           setSelectedModel(models[0].id);
         }
       } catch (error) {
@@ -310,7 +310,7 @@ export function useDocGenerator() {
         } else {
             setLogs(prev => [...prev, `Fetching ${filePath}...`]);
             try {
-                const content = await fetchFileContent({ owner, repo, path: file.path, apiKey: apiKeys.github });
+                const content = await fetchFileContent({ owner: owner!, repo: repo!, path: file.path, apiKey: apiKeys.github });
                 const size = new Blob([content]).size;
                 fetchedFiles.push({ path: filePath, content });
                 setCachedData(cacheKey, { content, size });

@@ -74,9 +74,9 @@ const generateDocumentationFlow = ai.defineFlow(
     }
   },
   async (input) => {
-    const customAI = input.apiKey ? googleAI({apiKey: input.apiKey}) : undefined;
-    const model = input.model ? (customAI || googleAI).model(input.model) : undefined;
-    const { output } = await prompt(input, { model, plugins: customAI ? [customAI] : undefined });
+    const customAI = googleAI({apiKey: input.apiKey || undefined});
+    const model = input.model ? customAI.model(input.model) : undefined;
+    const { output } = await prompt(input, { model, plugins: [customAI] });
     return output!;
   }
 );

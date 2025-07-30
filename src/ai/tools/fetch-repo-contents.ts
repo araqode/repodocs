@@ -110,7 +110,7 @@ export const fetchRepoContents = ai.defineTool(
 
 
 export async function listGenerativeModels({apiKey}: {apiKey?: string}) {
-    const customAI = googleAI({apiKey});
+    const customAI = googleAI({apiKey: apiKey || undefined});
     const allModels = await listModels({plugins: [customAI]});
     const supportedModels = new Set([gemini20Flash.name, gemini15Flash.name, gemini15Pro.name]);
     const generativeModels = allModels.filter(m => m.supportsGenerate && supportedModels.has(m.name));
