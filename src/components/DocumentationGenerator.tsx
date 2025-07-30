@@ -38,7 +38,8 @@ export function DocumentationGenerator() {
     logs,
     generatedRepoUrl,
     logContainerRef,
-    toggleSelection
+    toggleSelection,
+    fileSizes
   } = useDocGenerator();
 
   return (
@@ -87,6 +88,7 @@ export function DocumentationGenerator() {
               toggleFolderExpansion={toggleFolderExpansion}
               loadedPaths={loadedPaths}
               toggleSelection={toggleSelection}
+              fileSizes={fileSizes}
             />
             <ActionBar 
               handleGenerateDocs={handleGenerateDocs}

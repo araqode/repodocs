@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronRight, ChevronDown, FolderOpen, Folder, File as FileIcon } from "lucide-react";
 import { FileNode } from "@/ai/tools/fetch-repo-contents";
 import { CacheStatusIcon } from "./CacheStatusIcon";
+import { formatFileSize } from "@/lib/utils";
 
 type RepoState<T> = { [repoPath: string]: T };
 type FileSelection = { [path: string]: boolean };
@@ -20,6 +21,7 @@ type InnerFileTreeViewProps = {
     loadedPaths: RepoState<{ [path: string]: boolean }>;
     cacheStatus: RepoState<{ [path: string]: boolean }>;
     toggleSelection: (repoPath: string, path: string, isSelected: boolean) => void;
+    fileSizes: RepoState<{ [path: string]: number }>;
 };
 
 export const InnerFileTreeView = ({ 
@@ -32,12 +34,14 @@ export const InnerFileTreeView = ({
     toggleFolderExpansion,
     loadedPaths,
     cacheStatus,
-    toggleSelection
+    toggleSelection,
+    fileSizes
 }: InnerFileTreeViewProps) => {
     const currentExpanded = expandedFolders[repoPath] || {};
     const currentCacheStatus = cacheStatus[repoPath] || {};
     const currentLoadedPaths = loadedPaths[repoPath] || {};
     const currentSelection = fileSelection[repoPath] || {};
+    const currentFileSizes = fileSizes[repoPath] || {};
 
     return (
         <ul className="space-y-1">
@@ -70,7 +74,7 @@ export const InnerFileTreeView = ({
                             </div>
                             {isExpanded && node.children && node.children.length > 0 && (
                                 <div className="pl-6">
-                                    <InnerFileTreeView nodes={node.children} repoPath={repoPath} expandedFolders={expandedFolders} fileSelection={fileSelection} getFolderSelectionState={getFolderSelectionState} toggleFolderSelection={toggleFolderSelection} toggleFolderExpansion={toggleFolderExpansion} loadedPaths={loadedPaths} cacheStatus={cacheStatus} toggleSelection={toggleSelection} />
+                                    <InnerFileTreeView nodes={node.children} repoPath={repoPath} expandedFolders={expandedFolders} fileSelection={fileSelection} getFolderSelectionState={getFolderSelectionState} toggleFolderSelection={toggleFolderSelection} toggleFolderExpansion={toggleFolderExpansion} loadedPaths={loadedPaths} cacheStatus={cacheStatus} toggleSelection={toggleSelection} fileSizes={fileSizes} />
                                 </div>
                             )}
                             {isExpanded && !node.children?.length && currentLoadedPaths[node.path] && (
@@ -79,6 +83,7 @@ export const InnerFileTreeView = ({
                         </li>
                     );
                 }
+                const fileSize = currentFileSizes[node.path];
                 return (
                     <li key={node.path} className="flex items-center gap-2 pl-6 py-1">
                         <Checkbox
@@ -88,7 +93,10 @@ export const InnerFileTreeView = ({
                             aria-label={`Select file ${node.name}`}
                         />
                         <FileIcon className="h-5 w-5 text-muted-foreground" />
-                        <label htmlFor={`${repoPath}-${node.path}`} className="cursor-pointer">{node.name}</label>
+                        <label htmlFor={`${repoPath}-${node.path}`} className="cursor-pointer flex-grow">{node.name}</label>
+                        {fileSize !== undefined && (
+                            <span className="text-xs text-muted-foreground font-mono">{formatFileSize(fileSize)}</span>
+                        )}
                     </li>
                 );
             })}

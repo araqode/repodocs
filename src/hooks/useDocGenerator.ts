@@ -42,6 +42,7 @@ export function useDocGenerator() {
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [cacheStatus, setCacheStatus] = useState<RepoState<{[path: string]: boolean}>>({});
   const [loadedPaths, setLoadedPaths] = useState<RepoState<{[path: string]: boolean}>>({});
+  const [fileSizes, setFileSizes] = useState<RepoState<{[path: string]: number}>>({});
   
   const { toast } = useToast();
 
@@ -123,6 +124,11 @@ export function useDocGenerator() {
         return next;
     });
      setLoadedPaths(prev => {
+        const next = {...prev};
+        delete next[repoPathToRemove];
+        return next;
+    });
+    setFileSizes(prev => {
         const next = {...prev};
         delete next[repoPathToRemove];
         return next;
@@ -249,15 +255,18 @@ export function useDocGenerator() {
         
         const cachedContent = getCachedData(cacheKey);
 
-        if (cachedContent) {
-            fetchedFiles.push({ path: filePath, content: cachedContent });
+        if (cachedContent && cachedContent.content) {
+            fetchedFiles.push({ path: filePath, content: cachedContent.content });
+            setFileSizes(prev => ({ ...prev, [file.repoPath]: { ...(prev[file.repoPath] || {}), [file.path]: cachedContent.size } }));
             setLogs(prev => [...prev, `Using cached content for ${filePath}.`]);
         } else {
             setLogs(prev => [...prev, `Fetching ${filePath}...`]);
             try {
                 const content = await fetchFileContent({ owner, repo, path: file.path });
+                const size = new Blob([content]).size;
                 fetchedFiles.push({ path: filePath, content });
-                setCachedData(cacheKey, content);
+                setCachedData(cacheKey, { content, size });
+                setFileSizes(prev => ({ ...prev, [file.repoPath]: { ...(prev[file.repoPath] || {}), [file.path]: size } }));
                 setLogs(prev => [...prev, `Fetched ${filePath} successfully.`]);
             } catch (error) {
                 setLogs(prev => [...prev, `Failed to fetch ${filePath}.`]);
@@ -416,6 +425,7 @@ export function useDocGenerator() {
     toggleFolderExpansion,
     getFolderSelectionState,
     toggleAllSelectionForRepo,
-    getRootSelectionState
+    getRootSelectionState,
+    fileSizes
   };
 }
