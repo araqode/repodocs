@@ -11,7 +11,7 @@ type Model = {
 };
 
 type ActionBarProps = {
-    handleGenerateDocs: () => void;
+    onGenerateClick: () => void;
     isLoading: boolean;
     isFetchingContent: boolean;
     availableModels: Model[];
@@ -20,7 +20,7 @@ type ActionBarProps = {
 };
 
 export function ActionBar({
-    handleGenerateDocs,
+    onGenerateClick,
     isLoading,
     isFetchingContent,
     availableModels,
@@ -29,7 +29,7 @@ export function ActionBar({
 }: ActionBarProps) {
     return (
         <div className="flex flex-col sm:flex-row items-center gap-4 mt-4">
-            <Button onClick={handleGenerateDocs} disabled={isLoading || isFetchingContent} className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button onClick={onGenerateClick} disabled={isLoading || isFetchingContent} className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90">
             {isLoading || isFetchingContent ? (
                 <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

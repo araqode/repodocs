@@ -11,6 +11,7 @@ import { ActionBar } from "@/components/doc-generator/ActionBar";
 import { LogDisplay } from "@/components/doc-generator/LogDisplay";
 import { Github } from "lucide-react";
 import { ApiSettings } from "./doc-generator/ApiSettings";
+import { PromptEditorDialog } from "./doc-generator/PromptEditorDialog";
 
 export function DocumentationGenerator() {
   const {
@@ -29,7 +30,7 @@ export function DocumentationGenerator() {
     toggleFolderSelection,
     toggleFolderExpansion,
     loadedPaths,
-    handleGenerateDocs,
+    onGenerateClick,
     isLoading,
     isFetchingContent,
     availableModels,
@@ -44,7 +45,12 @@ export function DocumentationGenerator() {
     apiKeys,
     setApiKeys,
     isApiSettingsOpen,
-    setIsApiSettingsOpen
+    setIsApiSettingsOpen,
+    isPromptModalOpen,
+    setIsPromptModalOpen,
+    editablePrompt,
+    setEditablePrompt,
+    confirmAndGenerate,
   } = useDocGenerator();
 
   return (
@@ -54,6 +60,14 @@ export function DocumentationGenerator() {
         onOpenChange={setIsApiSettingsOpen}
         apiKeys={apiKeys}
         setApiKeys={setApiKeys}
+      />
+      <PromptEditorDialog
+        isOpen={isPromptModalOpen}
+        onOpenChange={setIsPromptModalOpen}
+        prompt={editablePrompt}
+        setPrompt={setEditablePrompt}
+        onConfirm={confirmAndGenerate}
+        isLoading={isLoading}
       />
       <Card className="shadow-lg">
         <CardHeader>
@@ -102,7 +116,7 @@ export function DocumentationGenerator() {
               fileSizes={fileSizes}
             />
             <ActionBar 
-              handleGenerateDocs={handleGenerateDocs}
+              onGenerateClick={onGenerateClick}
               isLoading={isLoading}
               isFetchingContent={isFetchingContent}
               availableModels={availableModels}

@@ -31,6 +31,8 @@ type ApiKeys = {
     github: string;
 };
 
+const defaultPrompt = `Please provide a high-level overview of the project, including its purpose and key features. Then, for each file, describe its role and functionality. Finally, detail the relationships and interactions between the different files and components.`;
+
 export function useDocGenerator() {
   const [documentation, setDocumentation] = useState<string | null>(null);
   const [generatedRepoUrl, setGeneratedRepoUrl] = useState<string>("");
@@ -50,6 +52,8 @@ export function useDocGenerator() {
   const [fileSizes, setFileSizes] = useState<RepoState<{[path: string]: number}>>({});
   const [apiKeys, setApiKeys] = useState<ApiKeys>({ gemini: '', github: '' });
   const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+  const [editablePrompt, setEditablePrompt] = useState(defaultPrompt);
 
   
   const { toast } = useToast();
@@ -237,8 +241,8 @@ export function useDocGenerator() {
     setIsFetchingRepo(prev => ({...prev, [values.repoPath]: false}));
     form.reset();
   }
-
-  async function handleGenerateDocs() {
+  
+  const onGenerateClick = () => {
     if (repoPaths.length === 0) return;
     if (!apiKeys.gemini) {
       toast({
@@ -250,11 +254,6 @@ export function useDocGenerator() {
       return;
     }
     
-    setIsLoading(true);
-    setDocumentation(null);
-    setLogs([]);
-    setIsFetchingContent(true);
-
     const selectedFilesToFetch: {repoPath: string, path: string}[] = [];
     repoPaths.forEach(repoPath => {
         const selection = fileSelection[repoPath] || {};
@@ -270,10 +269,27 @@ export function useDocGenerator() {
             title: "No files selected",
             description: "Please select at least one file to generate documentation.",
         });
-        setIsLoading(false);
-        setIsFetchingContent(false);
         return;
     }
+    
+    setIsPromptModalOpen(true);
+  };
+  
+  async function confirmAndGenerate() {
+    setIsPromptModalOpen(false);
+    setIsLoading(true);
+    setDocumentation(null);
+    setLogs([]);
+    setIsFetchingContent(true);
+
+    const selectedFilesToFetch: {repoPath: string, path: string}[] = [];
+    repoPaths.forEach(repoPath => {
+        const selection = fileSelection[repoPath] || {};
+        const selected = Object.entries(selection)
+            .filter(([,isSelected]) => isSelected)
+            .map(([path]) => ({repoPath, path}));
+        selectedFilesToFetch.push(...selected);
+    });
     
     setGeneratedRepoUrl(repoPaths.map(p => `https://github.com/${p}`).join(', '));
 
@@ -323,7 +339,12 @@ export function useDocGenerator() {
 
     try {
       setLogs(prev => [...prev, `Generating documentation with ${selectedModel}...`]);
-      const result = await generateDocumentation({ files: fetchedFiles, model: selectedModel, apiKey: apiKeys.gemini });
+      const result = await generateDocumentation({ 
+        files: fetchedFiles, 
+        userPrompt: editablePrompt,
+        model: selectedModel, 
+        apiKey: apiKeys.gemini 
+      });
       if (result.documentation) {
         setDocumentation(result.documentation);
         setLogs(prev => [...prev, 'Documentation generated successfully!']);
@@ -455,7 +476,8 @@ export function useDocGenerator() {
     generatedRepoUrl,
     isLoading,
     isFetchingContent,
-    handleGenerateDocs,
+    onGenerateClick,
+    confirmAndGenerate,
     toggleSelection,
     toggleFolderSelection,
     toggleFolderExpansion,
@@ -467,5 +489,9 @@ export function useDocGenerator() {
     setApiKeys: handleSetApiKeys,
     isApiSettingsOpen,
     setIsApiSettingsOpen,
+    isPromptModalOpen,
+    setIsPromptModalOpen,
+    editablePrompt,
+    setEditablePrompt,
   };
 }

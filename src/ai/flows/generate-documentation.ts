@@ -10,7 +10,6 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { fetchRepoContents } from '../tools/fetch-repo-contents';
 import { googleAI } from '@genkit-ai/googleai';
 
 const GenerateDocumentationInputSchema = z.object({
@@ -18,6 +17,7 @@ const GenerateDocumentationInputSchema = z.object({
     path: z.string(),
     content: z.string(),
   })).describe('An array of file objects, each with a path and its content.'),
+  userPrompt: z.string().optional().describe('Additional user instructions to refine the documentation.'),
   model: z.string().optional().describe('The model to use for generation.'),
   apiKey: z.string().optional().describe('Gemini API key')
 });
@@ -37,6 +37,7 @@ const prompt = ai.definePrompt({
   input: { schema: GenerateDocumentationInputSchema },
   output: { schema: GenerateDocumentationOutputSchema },
   prompt: `You are an expert technical writer. Generate comprehensive documentation for the provided files from a GitHub repository.
+
 The user has selected the following files to be documented:
 {{#each files}}
 File: {{{path}}}
@@ -44,11 +45,18 @@ Content:
 \'\'\'
 {{{content}}}
 \'\'\'
-
 {{/each}}
 
-Ensure the documentation includes project architecture, key components, usage instructions, and any relevant examples. Properly link and map relationships between files and documentation parts for clarity. Format the documentation for readability and include a table of contents.
-Use dashed-underline for inline hrefs/links for documentation to file mapping.
+Please adhere to the following instructions:
+- Ensure the documentation includes project architecture, key components, usage instructions, and any relevant examples.
+- Properly link and map relationships between files and documentation parts for clarity.
+- Format the documentation for readability and include a table of contents.
+- Use dashed-underline for inline hrefs/links for documentation to file mapping.
+
+{{#if userPrompt}}
+Additional instructions from the user:
+{{{userPrompt}}}
+{{/if}}
 `,
 });
 
