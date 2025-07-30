@@ -12,6 +12,7 @@ import { LogDisplay } from "@/components/doc-generator/LogDisplay";
 import { Github } from "lucide-react";
 import { ApiSettings } from "./doc-generator/ApiSettings";
 import { PromptEditorDialog } from "./doc-generator/PromptEditorDialog";
+import { AiInteractionDisplay } from "./doc-generator/AiInteractionDisplay";
 
 export function DocumentationGenerator() {
   const {
@@ -35,6 +36,7 @@ export function DocumentationGenerator() {
     isFetchingContent,
     documentation,
     logs,
+    aiInteractions,
     generatedRepoUrl,
     logContainerRef,
     toggleSelection,
@@ -123,6 +125,10 @@ export function DocumentationGenerator() {
 
       {(isFetchingContent || isLoading || (logs && logs.length > 0)) && (
         <LogDisplay logs={logs} isLoading={isLoading || isFetchingContent} logContainerRef={logContainerRef} />
+      )}
+      
+      {aiInteractions.length > 0 && (
+        <AiInteractionDisplay interactions={aiInteractions} />
       )}
 
       {isLoading && !documentation && <LoadingSkeleton />}

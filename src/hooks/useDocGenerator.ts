@@ -26,6 +26,11 @@ type ApiKeys = {
     github: string;
 };
 
+type AiInteraction = {
+  request: string;
+  response: any;
+};
+
 const defaultPrompt = `Please provide a high-level overview of the project, including its purpose and key features. Then, for each file, describe its role and functionality. Finally, detail the relationships and interactions between the different files and components.`;
 
 const GITHUB_API_THROTTLE_MS = 200;
@@ -134,6 +139,7 @@ export function useDocGenerator() {
   const [fileSelection, setFileSelection] = useState<RepoFileSelection>({});
   const [expandedFolders, setExpandedFolders] = useState<RepoState<{[path: string]: boolean}>>({});
   const [logs, setLogs] = useState<string[]>([]);
+  const [aiInteractions, setAiInteractions] = useState<AiInteraction[]>([]);
   const logContainerRef = useRef<HTMLDivElement | null>(null);
   const [cacheStatus, setCacheStatus] = useState<RepoState<{[path: string]: boolean}>>({});
   const [loadedPaths, setLoadedPaths] = useState<RepoState<{[path: string]: boolean}>>({});
@@ -187,6 +193,7 @@ export function useDocGenerator() {
   const resetGenerationState = () => {
     setDocumentation(null);
     setGeneratedRepoUrl("");
+    setAiInteractions([]);
   };
   
   const removeRepository = (repoPathToRemove: string) => {
@@ -344,6 +351,7 @@ export function useDocGenerator() {
     setIsLoading(true);
     setDocumentation(null);
     setLogs([]);
+    setAiInteractions([]);
     setGeneratedRepoUrl(repoPaths.map(p => `https://github.com/${p}`).join(', '));
     
     const fetchedFiles: { path: string, content: string }[] = [];
@@ -432,6 +440,7 @@ export function useDocGenerator() {
             Provide only the summary for this single file.`;
             
             const summaryResponse = await callGeminiAPI(apiKeys.gemini, summarizeFilePrompt);
+            setAiInteractions(prev => [...prev, {request: summarizeFilePrompt, response: summaryResponse}]);
             summaries.push(summaryResponse);
       }
       
@@ -455,6 +464,7 @@ export function useDocGenerator() {
       `;
 
       const finalResponse = await callGeminiAPI(apiKeys.gemini, synthesizeDocumentationPrompt);
+      setAiInteractions(prev => [...prev, {request: synthesizeDocumentationPrompt, response: finalResponse}]);
 
       if (finalResponse.documentation) {
         setDocumentation(finalResponse.documentation);
@@ -587,6 +597,7 @@ export function useDocGenerator() {
     fileSelection,
     expandedFolders,
     logs,
+    aiInteractions,
     logContainerRef,
     cacheStatus,
     loadedPaths,
@@ -613,5 +624,3 @@ export function useDocGenerator() {
     setEditablePrompt,
   };
 }
-
-    
