@@ -1,8 +1,9 @@
+
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronRight, ChevronDown, FolderOpen, Folder, File as FileIcon } from "lucide-react";
-import { FileNode } from "@/ai/tools/fetch-repo-contents";
+import type { FileNode } from "@/types/file-node";
 import { CacheStatusIcon } from "./CacheStatusIcon";
 import { formatFileSize } from "@/lib/utils";
 
@@ -103,3 +104,5 @@ export const InnerFileTreeView = ({
         </ul>
     );
 };
+
+    

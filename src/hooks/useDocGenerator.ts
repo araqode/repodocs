@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -5,9 +6,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { generateDocumentation } from "@/ai/actions/generate-documentation.action";
-import { fetchRepoContents, fetchFileContent, type FileNode } from "@/ai/tools/fetch-repo-contents";
 import { useToast } from "@/hooks/use-toast";
+import type { FileNode } from "@/types/file-node";
 
 const repoFormSchema = z.object({
   repoPath: z.string().min(1, { message: "Please enter a repository path." }).refine(
@@ -19,7 +19,7 @@ const repoFormSchema = z.object({
 type FileSelection = { [path: string]: boolean };
 type RepoFileSelection = { [repoPath: string]: FileSelection };
 type RepoTree = { [repoPath: string]: FileNode[] };
-type RepoState<T> = { [repoPath: string]: T };
+type RepoState<T> = { [repoPath:string]: T };
 
 type ApiKeys = {
     gemini: string;
@@ -29,6 +29,99 @@ type ApiKeys = {
 const defaultPrompt = `Please provide a high-level overview of the project, including its purpose and key features. Then, for each file, describe its role and functionality. Finally, detail the relationships and interactions between the different files and components.`;
 
 const GITHUB_API_THROTTLE_MS = 200;
+
+// --- GitHub API Client-Side Functions ---
+
+async function fetchFromGitHubApi(url: string, apiKey?: string) {
+    const headers: HeadersInit = {
+        'Accept': 'application/vnd.github.v3+json',
+    };
+    if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const response = await fetch(url, { headers });
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`GitHub API request failed with status ${response.status}: ${errorBody}`);
+    }
+    return response.json();
+}
+
+async function fetchRepoContents({ repoPath, path, apiKey }: { repoPath: string, path?: string, apiKey?: string }): Promise<FileNode[]> {
+    const [owner, repo] = repoPath.split('/');
+    if (!owner || !repo) {
+        throw new Error('Invalid repo path format. Expected owner/repo.');
+    }
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path || ''}`;
+    const contents = await fetchFromGitHubApi(url, apiKey);
+    if (!Array.isArray(contents)) {
+        throw new Error('Unexpected API response format. Expected an array of files/directories.');
+    }
+
+    return contents.map((item: any) => ({
+        name: item.name,
+        path: item.path,
+        type: item.type,
+        sha: item.sha,
+        children: item.type === 'dir' ? [] : undefined,
+    }));
+}
+
+
+async function fetchFileContent({ owner, repo, path, apiKey }: { owner: string, repo: string, path: string, apiKey?: string }): Promise<string> {
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    try {
+        const contentResponse = await fetchFromGitHubApi(url, apiKey);
+        if (contentResponse.encoding === 'base64') {
+            // Buffer is not available in the browser, use atob
+            return atob(contentResponse.content);
+        }
+        return 'Could not decode file content.';
+    } catch (e) {
+        console.error(`Could not fetch content for ${path}: ${e}`);
+        return `Error fetching content for ${path}.`;
+    }
+}
+
+
+// --- Gemini API Client-Side Functions ---
+
+async function callGeminiAPI(apiKey: string, prompt: string) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                response_mime_type: "application/json",
+            }
+        })
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        console.error("Gemini API Error:", errorBody);
+        throw new Error(`Gemini API request failed with status ${response.status}. See console for details.`);
+    }
+
+    const data = await response.json();
+    
+    try {
+        // The response from Gemini is a stringified JSON inside the 'text' field
+        const textResponse = data.candidates[0].content.parts[0].text;
+        return JSON.parse(textResponse);
+    } catch (e) {
+        console.error("Failed to parse Gemini response:", data);
+        throw new Error("Could not parse the response from the AI. The format was unexpected.");
+    }
+}
+
 
 export function useDocGenerator() {
   const [documentation, setDocumentation] = useState<string | null>(null);
@@ -58,19 +151,6 @@ export function useDocGenerator() {
     defaultValues: { repoPath: "" },
   });
   
-  useEffect(() => {
-    const storedKeys = getCachedData('api-keys');
-    if (storedKeys) {
-      setApiKeys(storedKeys);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-    }
-  }, [logs]);
-
   const getCachedData = useCallback((key: string) => {
     try {
       const cachedData = localStorage.getItem(key);
@@ -89,6 +169,20 @@ export function useDocGenerator() {
       console.error("Failed to write to local storage:", error);
     }
   }, []);
+  
+  useEffect(() => {
+    const storedKeys = getCachedData('api-keys');
+    if (storedKeys) {
+      setApiKeys(storedKeys);
+    }
+  }, [getCachedData]);
+
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
+
 
   const resetGenerationState = () => {
     setDocumentation(null);
@@ -315,14 +409,55 @@ export function useDocGenerator() {
     try {
       setLogs(prev => [...prev, `Step 2: Starting documentation generation with AI...`]);
       setLogs(prev => [...prev, `  [AI] Summarizing ${fetchedFiles.length} file(s)...`]);
-      const result = await generateDocumentation({ 
-        files: fetchedFiles, 
-        userPrompt: editablePrompt,
-        apiKey: apiKeys.gemini 
-      });
+      
+      const summaries = [];
+      for (const file of fetchedFiles) {
+          setLogs(prev => [...prev, `  Summarizing file: ${file.path}`]);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
+
+          const summarizeFilePrompt = `You are an expert technical writer. Analyze the following file and provide a concise summary.
+            Your response must be a JSON object with keys "path" and "summary".
+            
+            File Path: ${file.path}
+            Content:
+            '''
+            ${file.content}
+            '''
+
+            Your summary should cover:
+            - The primary purpose and responsibility of this file.
+            - Key functions, classes, or components exported.
+            - Its role within the overall project structure.
+
+            Provide only the summary for this single file.`;
+            
+            const summaryResponse = await callGeminiAPI(apiKeys.gemini, summarizeFilePrompt);
+            summaries.push(summaryResponse);
+      }
+      
       setLogs(prev => [...prev, `  [AI] Synthesizing final documentation...`]);
-      if (result.documentation) {
-        setDocumentation(result.documentation);
+      
+      const synthesizeDocumentationPrompt = `You are an expert technical writer. You have been provided with summaries for several files from a codebase. Your task is to synthesize these into a single, comprehensive technical document.
+        Your response must be a JSON object with the key "documentation".
+
+        The user's overall goal for this documentation is:
+        ${editablePrompt || 'Provide a high-level overview of the project, including its purpose and key features. Then, for each file, describe its role and functionality based on the summary. Finally, detail the relationships and interactions between the different files and components.'}
+
+        Here are the summaries for each file:
+        ${JSON.stringify(summaries, null, 2)}
+        
+        Please adhere to the following instructions:
+        - Create a well-structured and comprehensive technical documentation.
+        - The documentation should include an overview of the project, followed by the detailed descriptions based on the summaries provided.
+        - **Crucially, analyze and explain the relationships and interactions between the different files.** This is vital for understanding the project's data flow and overall structure.
+        - Format the final output for readability. Use Markdown for structuring the text (e.g., headings, lists, code blocks).
+        - Use dashed-underline for inline hrefs/links for documentation to file mapping.
+      `;
+
+      const finalResponse = await callGeminiAPI(apiKeys.gemini, synthesizeDocumentationPrompt);
+
+      if (finalResponse.documentation) {
+        setDocumentation(finalResponse.documentation);
         setLogs(prev => [...prev, 'Step 2: Documentation generated successfully!']);
         toast({
             title: "Success!",

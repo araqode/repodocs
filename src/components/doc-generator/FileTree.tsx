@@ -1,10 +1,11 @@
+
 "use client";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, FolderGit2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileNode } from "@/ai/tools/fetch-repo-contents";
+import type { FileNode } from "@/types/file-node";
 import { CacheStatusIcon } from "./CacheStatusIcon";
 import { InnerFileTreeView } from "./InnerFileTreeView";
 
@@ -76,3 +77,5 @@ export function FileTree({
         </TooltipProvider>
     );
 }
+
+    
